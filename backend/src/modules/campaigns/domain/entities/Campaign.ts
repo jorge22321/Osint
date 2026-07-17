@@ -1,0 +1,10 @@
+export interface Campaign {
+  id?: string;
+  id_organizacion: string;
+  nombre: string;
+  tipo: 'Phishing' | 'Smishing';
+  estado: 'Borrador' | 'Programada' | 'En Progreso' | 'Finalizada';
+  fecha_programada?: Date | null;
+  creado_por: string;
+  creado_en?: Date;
+}
