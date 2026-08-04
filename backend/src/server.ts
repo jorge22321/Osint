@@ -14,6 +14,8 @@ import { targetsTypeDefs } from './modules/targets/infrastructure/graphql/typeDe
 import { targetsResolvers } from './modules/targets/infrastructure/graphql/resolvers';
 import { campaignTypeDefs } from './modules/campaigns/infrastructure/graphql/typeDefs';
 import { campaignResolvers } from './modules/campaigns/infrastructure/graphql/resolvers';
+import { dashboardTypeDefs } from './modules/dashboard/infrastructure/graphql/typeDefs';
+import { dashboardResolvers } from './modules/dashboard/infrastructure/graphql/resolvers';
 async function startServer() {
   const app = express();
 
@@ -29,8 +31,8 @@ async function startServer() {
 
   // 1. Inicializar Apollo Server con nuestro esquema de Login
   const server = new ApolloServer({
-  typeDefs: [iamTypeDefs, osintTypeDefs, targetsTypeDefs, campaignTypeDefs],
-  resolvers: [iamResolvers, osintResolvers, targetsResolvers, campaignResolvers],
+  typeDefs: [iamTypeDefs, osintTypeDefs, targetsTypeDefs, campaignTypeDefs,dashboardTypeDefs],
+  resolvers: [iamResolvers, osintResolvers, targetsResolvers, campaignResolvers, dashboardResolvers],
 });
 
   // Es obligatorio arrancar el servidor de Apollo antes de pasarlo a Express

@@ -283,8 +283,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import SelectTargetsModal from '../components//modals/SelectTargetsModal.vue'
+import { ref, computed, watch } from 'vue'
+import SelectTargetsModal from '../components/modals/SelectTargetsModal.vue'
 
 // --- Interfaces ---
 interface FormData {
@@ -299,11 +299,13 @@ const step = ref(1)
 const showTargetModal = ref(false)
 const isGenerating = ref(false)
 const isDeploying = ref(false)
+
 const selectDay = (day: { date: number | string; isCurrentMonth: boolean }) => {
   if (day.isCurrentMonth && typeof day.date === 'number') {
     selectedDay.value = day.date
   }
 }
+
 const form = ref<FormData>({
   name: '',
   vector: 'email',
@@ -313,6 +315,7 @@ const form = ref<FormData>({
 
 // --- Selección de destinatarios ---
 const selectedTargets = ref<string[]>([])
+const selectedTargetUsers = ref<any[]>([])
 
 // --- Datos del administrador y organización ---
 const admin = computed(() => {
@@ -321,10 +324,10 @@ const admin = computed(() => {
 })
 const organizacionId = computed(() => admin.value.id_organizacion || '')
 
-// --- Datos OSINT (para el panel) ---
+// --- Datos OSINT (para el panel e IA) ---
 const organizationDomain = ref('')
 const exposedEmails = ref<string[]>([])
-const selectedTargetUsers = ref<any[]>([])
+const latestOsintLogId = ref<string>('') // Guardamos el ID del log OSINT
 
 const getDomainFromEmail = (email: string) => {
   if (!email) return ''
@@ -360,11 +363,9 @@ const daysInMonth = computed(() => {
   const today = new Date()
   const isCurrentMonth = (currentMonth.value === today.getMonth() && currentYear.value === today.getFullYear())
   
-  // Días vacíos al inicio
   for (let i = 0; i < firstDay; i++) {
     days.push({ date: '', isCurrentMonth: false })
   }
-  // Días del mes
   for (let d = 1; d <= daysCount; d++) {
     const isPast = isCurrentMonth && d < today.getDate()
     days.push({ date: d, isCurrentMonth: !isPast })
@@ -413,25 +414,26 @@ const loadOsintData = async () => {
 
   try {
     const response = await fetch('http://localhost:4000/graphql', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('ciso_token')}`,
-      },
-      body: JSON.stringify({
-        query: `
-          mutation OsintScan($dominio: String!, $organizacionId: ID!) {
-            osintScan(dominio: $dominio, organizacionId: $organizacionId) {
-              fuente
-              tipo_hallazgo
-              detalle_json
-            }
-          }
-        `,
-        variables: {
-          dominio: activeDomain,
-          organizacionId: organizacionId.value,
-        },
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${localStorage.getItem('ciso_token')}`,
+  },
+  body: JSON.stringify({
+    query: `
+      mutation OsintScan($dominio: String!, $organizacionId: ID!) {
+        osintScan(dominio: $dominio, organizacionId: $organizacionId) {
+          id           
+          fuente
+          tipo_hallazgo
+          detalle_json
+        }
+      }
+    `,
+    variables: {
+      dominio: activeDomain,
+      organizacionId: organizacionId.value,
+    },
       }),
     })
 
@@ -443,12 +445,18 @@ const loadOsintData = async () => {
     const logs = result.data?.osintScan || []
     const emails: string[] = []
 
+    if (logs.length > 0 && logs[0].id) {
+  latestOsintLogId.value = logs[0].id
+  console.log(' Log OSINT asignado:', latestOsintLogId.value)
+} else {
+  console.warn(' No se obtuvo un ID de OSINT en el escaneo.')
+}
+
     logs.forEach((log: any) => {
       const detalle = log.detalle_json || {}
       if (detalle.email) emails.push(detalle.email)
-      if (detalle.emails) {
-        const more = detalle.emails
-        if (Array.isArray(more)) emails.push(...more)
+      if (detalle.emails && Array.isArray(detalle.emails)) {
+        emails.push(...detalle.emails)
       }
     })
 
@@ -459,19 +467,23 @@ const loadOsintData = async () => {
   }
 }
 
-
-
-// --- Generar contenido con IA ---
+// --- Generar contenido con IA (CORREGIDO) ---
 const generateContent = async () => {
-  if (!organizationDomain.value || organizationDomain.value === 'Cargando...') {
-    alert('Espera a que se cargue el dominio OSINT.')
+  if (!latestOsintLogId.value) {
+    alert('No se encontraron registros OSINT válidos para generar la campaña.')
     return
   }
+
   isGenerating.value = true
+
+  // Tomamos los datos del primer usuario objetivo seleccionado
+  const primerUsuario = selectedTargetUsers.value[0] || {}
+  const departamento = primerUsuario.departamento || 'General'
+  const nombreObjetivo = primerUsuario.nombre || primerUsuario.nombre_completo || ''
+  const cargoObjetivo = primerUsuario.cargo || primerUsuario.puesto || ''
+  const tipoSimulacion = form.value.vector === 'sms' ? 'Smishing' : 'Phishing'
+
   try {
-    // Construir contexto: usar el dominio y algunos emails expuestos
-    const context = `Empresa: ${organizationDomain.value}. Emails expuestos: ${exposedEmails.value.join(', ')}. Crea un correo de phishing simulado que parezca legítimo.`
-    
     const response = await fetch('http://localhost:4000/graphql', {
       method: 'POST',
       headers: {
@@ -480,23 +492,43 @@ const generateContent = async () => {
       },
       body: JSON.stringify({
         query: `
-          mutation GenerarContenido($contexto: String!) {
-  generarContenidoCampaign(contexto: $contexto) {
-    asunto
-    contenido
-  }
-}
+          mutation GenerarContenido(
+            $osintLogId: ID!
+            $departamento: String!
+            $tipoSimulacion: String!
+            $nombreObjetivo: String
+            $cargoObjetivo: String
+          ) {
+            generarContenidoCampaign(
+              osintLogId: $osintLogId
+              departamento: $departamento
+              tipoSimulacion: $tipoSimulacion
+              nombreObjetivo: $nombreObjetivo
+              cargoObjetivo: $cargoObjetivo
+            ) {
+              asunto
+              contenido
+            }
+          }
         `,
-        variables: { contexto: context },
+        variables: { 
+          osintLogId: latestOsintLogId.value,
+          departamento,
+          tipoSimulacion,
+          nombreObjetivo,
+          cargoObjetivo
+        },
       }),
     })
+
     const result = await response.json()
     if (result.errors) {
       throw new Error(result.errors[0].message)
     }
-   const data = result.data.generarContenidoCampaign;
-form.value.subject = data.asunto;
-form.value.body = data.contenido;
+
+    const data = result.data.generarContenidoCampaign
+    form.value.subject = data.asunto
+    form.value.body = data.contenido
   } catch (error: any) {
     alert('Error al generar contenido: ' + error.message)
   } finally {
@@ -513,7 +545,6 @@ const handleApplyTargets = (ids: string[], users: any[]) => {
 
 // --- Desplegar campaña ---
 const deployCampaign = async () => {
-  // --- Validaciones ---
   if (!form.value.name || selectedTargets.value.length === 0 || !form.value.subject || !form.value.body) {
     alert('Completa todos los campos obligatorios.')
     return
@@ -523,7 +554,6 @@ const deployCampaign = async () => {
     return
   }
 
-  // --- Obtener datos del admin ---
   const adminData = JSON.parse(localStorage.getItem('ciso_user') || '{}')
   const orgId = adminData.id_organizacion
   const adminId = adminData.id
@@ -533,13 +563,11 @@ const deployCampaign = async () => {
     return
   }
 
-  // --- Fecha programada ---
   const scheduledDate = new Date(currentYear.value, currentMonth.value, selectedDay.value)
   const isoDate = scheduledDate.toISOString()
 
   isDeploying.value = true
   try {
-    // --- 1. Crear la campaña ---
     const responseCampaign = await fetch('http://localhost:4000/graphql', {
       method: 'POST',
       headers: {
@@ -562,7 +590,7 @@ const deployCampaign = async () => {
             tipo: form.value.vector === 'email' ? 'Phishing' : 'Smishing',
             estado: 'Programada',
             fecha_programada: isoDate,
-             creado_por: adminId,
+            creado_por: adminId,
           },
           organizacionId: orgId,
         },
@@ -575,15 +603,14 @@ const deployCampaign = async () => {
     }
 
     const campaignId = resultCampaign.data.crearCampaign.id
-    alert(` Campaña "${resultCampaign.data.crearCampaign.nombre}" creada exitosamente. ID: ${campaignId}`)
+    alert(`Campaña "${resultCampaign.data.crearCampaign.nombre}" creada exitosamente. ID: ${campaignId}`)
 
-    // --- 2. Crear envíos para cada destinatario ---
     const asunto = form.value.subject
     const contenido = form.value.body
     let enviosExitosos = 0
 
     for (const targetId of selectedTargets.value) {
-      const trackingCode = crypto.randomUUID() // UUID único
+      const trackingCode = crypto.randomUUID()
 
       try {
         const responseEnvio = await fetch('http://localhost:4000/graphql', {
@@ -608,16 +635,13 @@ const deployCampaign = async () => {
                 asunto_generado: asunto,
                 contenido_generado: contenido,
                 tracking_code: trackingCode,
-                
               },
             },
           }),
         })
 
         const resultEnvio = await responseEnvio.json()
-        if (resultEnvio.errors) {
-          console.error(`Error al crear envío para ${targetId}:`, resultEnvio.errors)
-        } else {
+        if (!resultEnvio.errors) {
           enviosExitosos++
         }
       } catch (error) {
@@ -625,11 +649,11 @@ const deployCampaign = async () => {
       }
     }
 
-    alert(` ${enviosExitosos} de ${selectedTargets.value.length} envíos creados correctamente.`)
+    alert(`${enviosExitosos} de ${selectedTargets.value.length} envíos creados correctamente.`)
 
-    // --- Resetear formulario ---
     form.value = { name: '', vector: 'email', subject: '', body: '' }
     selectedTargets.value = []
+    selectedTargetUsers.value = []
     step.value = 1
 
   } catch (error: any) {
@@ -638,19 +662,13 @@ const deployCampaign = async () => {
     isDeploying.value = false
   }
 }
-// --- Lifecycle ---
-onMounted(async () => {
-  
-})
 
 // Watcher para cargar OSINT al entrar al paso 2
-import { watch } from 'vue'
 watch(step, (newStep) => {
   if (newStep === 2) {
     loadOsintData()
   }
 })
-
 </script>
 
 <style scoped>

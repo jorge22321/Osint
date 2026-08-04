@@ -1,3 +1,4 @@
+//backend/src/modules/campaigns/infrastructure/persistence/SupabaseCampaignRepository.ts
 import { supabase } from '../../../../shared/infrastructure/database/supabase';
 import { ICampaignRepository } from '../../domain/ports/ICampaignRepository';
 import { Campaign } from '../../domain/entities/Campaign';

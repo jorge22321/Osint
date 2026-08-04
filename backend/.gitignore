@@ -1,6 +1,6 @@
 # Dependencias
 node_modules/
-
+.env
 # Archivos de compilación generados por TypeScript (se generan al hacer 'npm run build')
 dist/
 build/

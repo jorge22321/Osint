@@ -1,3 +1,4 @@
+//backend/src/modules/campaigns/infrastructure/providers/MistralAdapter.ts
 import { Mistral } from '@mistralai/mistralai';
 import { IAiGenerator } from '../../domain/ports/IAiGenerator';
 
@@ -31,7 +32,7 @@ export class MistralAdapter implements IAiGenerator {
             role: 'user',
             content: `Contexto para la simulación: ${contexto}. 
             El correo debe parecer legítimo pero tener señales de alerta sutiles.`
-          }
+          } 
         ],
         temperature: 0.7,
         //  Si esta línea da error, coméntala o elimínala

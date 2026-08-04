@@ -43,4 +43,18 @@ export class SupabaseOsintRepository implements IOsintRepository {
     }
     return data as OsintLog[];
   }
+
+  async obtenerLogPorId(id: string): Promise<OsintLog | null> {
+    const { data, error } = await supabase
+      .from('osint_logs')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Error obteniendo log OSINT por ID:', error);
+      return null;
+    }
+    return data as OsintLog | null;
+  }
 }

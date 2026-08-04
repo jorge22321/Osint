@@ -1,3 +1,4 @@
+//backend/src/modules/campaigns/application/useCases/ListarCampaignsUseCase.ts
 import { ICampaignRepository } from '../../domain/ports/ICampaignRepository';
 import { Campaign } from '../../domain/entities/Campaign';
 

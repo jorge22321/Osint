@@ -1,3 +1,4 @@
+//backend/src/modules/campaigns/domain/entities/Campaign.ts
 export interface Campaign {
   id?: string;
   id_organizacion: string;

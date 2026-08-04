@@ -4,4 +4,5 @@ import { OsintLog } from '../entities/OsintLog';
 export interface IOsintRepository {
   guardarHallazgos(hallazgos: OsintLog[]): Promise<OsintLog[]>; // cambia void → OsintLog[]
   obtenerPorOrganizacion(organizacionId: string): Promise<OsintLog[]>;
+  obtenerLogPorId(id: string): Promise<OsintLog | null>;
 }

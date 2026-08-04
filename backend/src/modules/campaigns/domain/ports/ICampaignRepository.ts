@@ -1,3 +1,4 @@
+//backend/src/modules/campaigns/domain/ports/ICampaignRepository.ts
 import { Campaign } from '../entities/Campaign';
 
 export interface ICampaignRepository {

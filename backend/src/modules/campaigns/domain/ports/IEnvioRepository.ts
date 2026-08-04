@@ -1,3 +1,4 @@
+//backend/src/modules/campaigns/domain/ports/IEnvioRepository.ts
 export interface Envio {
   id?: string;
   id_campana: string;

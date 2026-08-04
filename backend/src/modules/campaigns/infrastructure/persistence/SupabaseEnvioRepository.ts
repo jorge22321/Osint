@@ -1,3 +1,4 @@
+//backend/src/modules/campaigns/infrastructure/persistence/SupabaseEnvioRepository.ts
 import { supabase } from '../../../../shared/infrastructure/database/supabase';
 import { IEnvioRepository, Envio } from '../../domain/ports/IEnvioRepository';
 

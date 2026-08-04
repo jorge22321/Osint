@@ -1,3 +1,4 @@
+// backend/src/modules/campaigns/infrastructure/graphql/typeDefs.ts
 export const campaignTypeDefs = `#graphql
   type Campaign {
     id: ID!
@@ -15,16 +16,16 @@ export const campaignTypeDefs = `#graphql
     tipo: String!
     estado: String
     fecha_programada: String
-     creado_por: ID! 
+    creado_por: ID! 
   }
 
   input CrearEnvioInput {
-  id_campana: ID!
-  id_usuario_objetivo: ID!
-  asunto_generado: String!
-  contenido_generado: String!
-  tracking_code: String!
-}
+    id_campana: ID!
+    id_usuario_objetivo: ID!
+    asunto_generado: String!
+    contenido_generado: String!
+    tracking_code: String!
+  }
 
   type GenerarContenidoResponse {
     asunto: String!
@@ -32,17 +33,17 @@ export const campaignTypeDefs = `#graphql
   }
 
   type Envio {
-  id: ID!
-  id_campana: ID!
-  id_usuario_objetivo: ID!
-  tracking_code: String!
-  estado: String!
-  asunto_generado: String!
-  contenido_generado: String!
-  fecha_envio: String
-  fecha_click: String
-  fecha_reporte: String
-}
+    id: ID!
+    id_campana: ID!
+    id_usuario_objetivo: ID!
+    tracking_code: String!
+    estado: String!
+    asunto_generado: String!
+    contenido_generado: String!
+    fecha_envio: String
+    fecha_click: String
+    fecha_reporte: String
+  }
 
   type Query {
     campaigns(organizacionId: ID!): [Campaign!]!
@@ -53,7 +54,15 @@ export const campaignTypeDefs = `#graphql
     crearCampaign(input: CrearCampaignInput!, organizacionId: ID!): Campaign!
     actualizarCampaign(id: ID!, input: CrearCampaignInput!): Campaign!
     eliminarCampaign(id: ID!): Boolean!
-    generarContenidoCampaign(contexto: String!): GenerarContenidoResponse!
+    
+    generarContenidoCampaign(
+      osintLogId: ID!
+      departamento: String!
+      tipoSimulacion: String!
+      nombreObjetivo: String
+      cargoObjetivo: String
+    ): GenerarContenidoResponse!
+
     crearEnvio(input: CrearEnvioInput!): Envio! 
   }
 `;

@@ -1,3 +1,4 @@
+//backend/src/modules/campaigns/application/useCases/EliminarCampaignUseCase.ts
 import { ICampaignRepository } from '../../domain/ports/ICampaignRepository';
 
 export class EliminarCampaignUseCase {

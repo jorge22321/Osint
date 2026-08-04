@@ -4,12 +4,12 @@ import { SupabaseOsintRepository } from '../persistence/SupabaseOsintRepository'
 import { OsintAggregateAdapter } from '../providers/OsintAggregateAdapter';
 import { HunterProvider } from '../providers/HunterProvider';
 import { XposedOrNotProvider } from '../providers/XposedOrNotProvider';
-
+import { ShodanProvider } from '../providers/ShodanProvider';
 const repository = new SupabaseOsintRepository();
 const hunterProvider = new HunterProvider();
 const xposedOrNotProvider = new XposedOrNotProvider();
-
-const aggregateProvider = new OsintAggregateAdapter([hunterProvider]);
+const shodanProvider = new ShodanProvider();
+const aggregateProvider = new OsintAggregateAdapter([hunterProvider, shodanProvider]);
 const useCase = new EjecutarEscaneoDominioUseCase(aggregateProvider, repository);
 
 export const osintResolvers = {

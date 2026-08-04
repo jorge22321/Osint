@@ -1,3 +1,4 @@
+//backend/src/modules/osint/domain/entities/OsintLog.ts
 export interface OsintLog {
   id?: string;
   id_organizacion: string;
