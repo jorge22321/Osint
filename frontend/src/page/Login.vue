@@ -110,6 +110,7 @@
 <script setup>
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
+import { GRAPHQL_URL } from '@/config/api'
 
 const router = useRouter()
 // Estado del formulario
@@ -160,7 +161,7 @@ const handleLogin = async () => {
   }
 
   try {
-    const response = await fetch('http://localhost:4000/graphql', {
+    const response = await fetch(GRAPHQL_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

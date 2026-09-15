@@ -213,6 +213,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue';
+import { GRAPHQL_URL } from '@/config/api';
 
 // -------------------- 1. Definición de tipos --------------------
 interface OsintLog {
@@ -473,7 +474,7 @@ const formatearLogs = (rawLogs: OsintLog[]): DisplayLog[] => {
 // -------------------- 6. Llamadas a la API --------------------
 const fetchLogs = async () => {
   try {
-    const response = await fetch('http://localhost:4000/graphql', {
+    const response = await fetch(GRAPHQL_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -514,7 +515,7 @@ const runScan = async () => {
   }
 
   try {
-    const response = await fetch('http://localhost:4000/graphql', {
+    const response = await fetch(GRAPHQL_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

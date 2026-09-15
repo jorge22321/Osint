@@ -226,8 +226,7 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
-
-const GRAPHQL_URL = 'http://localhost:4000/graphql'
+import { GRAPHQL_URL } from '@/config/api'
 
 // Helper para extraer la Organización desde la sesión del usuario guardada en Login.vue
 const obtenerOrganizacionActiva = () => {

@@ -11,6 +11,8 @@ import { GenerarContenidoIaUseCase } from '../../application/useCases/GenerarCon
 import { MistralAdapter } from '../providers/MistralAdapter';
 import { SupabaseEnvioRepository } from '../persistence/SupabaseEnvioRepository';
 import { CrearEnvioUseCase } from '../../application/useCases/CrearEnvioUseCase';
+import { NodemailerAdapter } from '../providers/NodemailerAdapter';
+import { TwilioSmsAdapter } from '../providers/TwilioSmsAdapter';
 
 const repo = new SupabaseCampaignRepository();
 const repoOsint = new SupabaseOsintRepository();
@@ -62,9 +64,16 @@ export const campaignResolvers = {
     },
 
     crearEnvio: async (_: any, { input }: { input: any }) => {
+      // Extraemos los datos que son para el UseCase pero NO van a la BD
+      const { vector, contacto_destino, ...envioDataBD } = input;
+
       const repoEnvio = new SupabaseEnvioRepository();
-      const useCase = new CrearEnvioUseCase(repoEnvio);
-      return await useCase.execute(input);
+      const emailProvider = new NodemailerAdapter();
+      const smsProvider = new TwilioSmsAdapter();
+      
+      const useCase = new CrearEnvioUseCase(repoEnvio, emailProvider, smsProvider);
+      
+      return await useCase.execute(envioDataBD, vector, contacto_destino);
     },
   },
 };

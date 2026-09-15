@@ -117,6 +117,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { GRAPHQL_URL } from '@/config/api'
 
 // --- Tipos ---
 interface Usuario {
@@ -191,7 +192,7 @@ const applySelection = () => {
 // --- Obtener empleados ---
 const fetchUsers = async () => {
   try {
-    const response = await fetch('http://localhost:4000/graphql', {
+    const response = await fetch(GRAPHQL_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

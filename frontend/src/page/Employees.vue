@@ -186,6 +186,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import AddEmployeeModal from '../components/modals/AddEmployeeModal.vue' // Ajusta la ruta según tu estructura
+import { GRAPHQL_URL } from '@/config/api'
 
 // --- Tipos ---
 interface UsuarioInput {
@@ -260,7 +261,7 @@ const getDashOffset = (score: number) => {
 // --- Obtener empleados desde GraphQL ---
 const fetchEmployees = async () => {
   try {
-    const response = await fetch('http://localhost:4000/graphql', {
+    const response = await fetch(GRAPHQL_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -347,7 +348,7 @@ const createUser = async (user: UsuarioInput) => {
     organizacionId: admin.value.id_organizacion,
   }
 
-  const response = await fetch('http://localhost:4000/graphql', {
+  const response = await fetch(GRAPHQL_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

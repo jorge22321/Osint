@@ -25,6 +25,8 @@ export const campaignTypeDefs = `#graphql
     asunto_generado: String!
     contenido_generado: String!
     tracking_code: String!
+    vector: String!             
+    contacto_destino: String!
   }
 
   type GenerarContenidoResponse {

@@ -154,37 +154,109 @@
         </div>
 
         <div class="col-span-12 lg:col-span-8">
-          <div class="bg-[#1d1f27] rounded-xl border border-[#434655] flex flex-col shadow-lg overflow-hidden">
-            <div class="p-4 border-b border-[#434655] flex items-center gap-6">
-              <button class="text-[10px] font-bold text-blue-500 border-b-2 border-blue-500 pb-1">EDITOR</button>
-              <button class="text-[10px] font-bold text-[#8d90a0] pb-1 hover:text-[#e1e2ed]">VISTA PREVIA</button>
+          <div class="bg-[#1d1f27] rounded-xl border border-[#434655] flex flex-col shadow-lg overflow-hidden h-full min-h-[450px]">
+            
+            <!-- TABS: Editor vs Vista Previa -->
+            <div class="p-4 border-b border-[#434655] flex items-center gap-6 bg-[#181a20]">
+              <button 
+                @click="activeTab = 'editor'"
+                :class="['text-[10px] font-bold pb-1 transition-all duration-300', activeTab === 'editor' ? 'text-blue-500 border-b-2 border-blue-500' : 'text-[#8d90a0] hover:text-[#e1e2ed]']"
+              >
+                EDITOR
+              </button>
+              <button 
+                @click="activeTab = 'preview'"
+                :class="['text-[10px] font-bold pb-1 transition-all duration-300', activeTab === 'preview' ? 'text-blue-500 border-b-2 border-blue-500' : 'text-[#8d90a0] hover:text-[#e1e2ed]']"
+              >
+                VISTA PREVIA
+              </button>
               <div class="ml-auto flex items-center gap-2">
                 <div class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
-                <span class="text-[9px] text-[#8d90a0] font-bold uppercase text-xs">Autoguardado</span>
+                <span class="text-[9px] text-[#8d90a0] font-bold uppercase">Autoguardado</span>
               </div>
             </div>
-            <div class="p-6 flex flex-col gap-4">
-              <div class="flex flex-col gap-2">
-                <label class="text-[10px] text-[#8d90a0] font-bold uppercase">Asunto Generado por IA</label>
-                <input 
-                  v-model="form.subject"
-                  class="w-full bg-[#11131b] border border-[#434655] rounded-lg p-3 text-sm text-[#e1e2ed] focus:border-blue-500 outline-none" 
-                  type="text"
-                >
-              </div>
-              <div class="flex flex-col gap-2">
-                <label class="text-[10px] text-[#8d90a0] font-bold uppercase">Cuerpo del Mensaje</label>
-                <div class="bg-[#11131b] border border-[#434655] rounded-lg flex flex-col h-64">
-                  <div class="p-2 border-b border-[#434655] flex items-center gap-3">
-                    <button class="p-1 hover:bg-[#32343d] rounded text-[#8d90a0]"><i class="fa-solid fa-bold text-xs"></i></button>
-                    <button class="p-1 hover:bg-[#32343d] rounded text-[#8d90a0]"><i class="fa-solid fa-italic text-xs"></i></button>
-                    <button class="p-1 hover:bg-[#32343d] rounded text-[#8d90a0]"><i class="fa-solid fa-link text-xs"></i></button>
-                  </div>
-                  <textarea 
-                    v-model="form.body"
-                    class="flex-1 bg-transparent p-4 resize-none border-none focus:ring-0 text-sm leading-relaxed text-[#e1e2ed] outline-none"
-                  ></textarea>
+
+            <!-- CONTENIDO DE LAS TABS -->
+            <div class="p-6 flex-1 flex flex-col overflow-hidden relative">
+              
+              <!-- Tab 1: EDITOR -->
+              <div v-if="activeTab === 'editor'" class="flex flex-col gap-4 h-full animate-in fade-in duration-300">
+                <div class="flex flex-col gap-2">
+                  <label class="text-[10px] text-[#8d90a0] font-bold uppercase">Asunto Generado por IA</label>
+                  <input 
+                    v-model="form.subject"
+                    class="w-full bg-[#11131b] border border-[#434655] rounded-lg p-3 text-sm text-[#e1e2ed] focus:border-blue-500 outline-none" 
+                    type="text"
+                    :disabled="form.vector === 'sms'"
+                    :placeholder="form.vector === 'sms' ? 'No aplica para SMS' : 'Asunto del correo...'"
+                  >
                 </div>
+                <div class="flex flex-col gap-2 flex-1">
+                  <label class="text-[10px] text-[#8d90a0] font-bold uppercase">Cuerpo del Mensaje</label>
+                  <div class="bg-[#11131b] border border-[#434655] rounded-lg flex flex-col h-full min-h-[200px]">
+                    <div class="p-2 border-b border-[#434655] flex items-center gap-3">
+                      <button class="p-1 hover:bg-[#32343d] rounded text-[#8d90a0]"><i class="fa-solid fa-bold text-xs"></i></button>
+                      <button class="p-1 hover:bg-[#32343d] rounded text-[#8d90a0]"><i class="fa-solid fa-italic text-xs"></i></button>
+                      <button class="p-1 hover:bg-[#32343d] rounded text-[#8d90a0]"><i class="fa-solid fa-link text-xs"></i></button>
+                    </div>
+                    <textarea 
+                      v-model="form.body"
+                      class="flex-1 bg-transparent p-4 resize-none border-none focus:ring-0 text-sm leading-relaxed text-[#e1e2ed] outline-none"
+                      placeholder="Escribe o genera el contenido aquí..."
+                    ></textarea>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Tab 2: VISTA PREVIA -->
+              <div v-if="activeTab === 'preview'" class="h-full w-full flex items-center justify-center animate-in fade-in duration-300 bg-[#11131b] rounded-xl border border-[#434655] p-6 overflow-y-auto">
+                
+                <!-- PREVIEW: EMAIL -->
+                <div v-if="form.vector === 'email'" class="w-full max-w-2xl bg-white rounded-xl text-[#202124] flex flex-col shadow-2xl overflow-hidden h-full">
+                  <div class="bg-[#f2f2f2] px-4 py-3 border-b border-gray-300 flex items-center gap-2">
+                    <div class="w-3 h-3 rounded-full bg-red-400"></div>
+                    <div class="w-3 h-3 rounded-full bg-yellow-400"></div>
+                    <div class="w-3 h-3 rounded-full bg-green-400"></div>
+                  </div>
+                  <div class="p-6 border-b border-gray-200">
+                    <div class="flex items-center gap-4 mb-4">
+                      <div class="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-lg">
+                        S
+                      </div>
+                      <div>
+                        <p class="text-sm font-semibold">seguridad@<span class="text-gray-500 font-normal">tuempresa.com</span></p>
+                        <p class="text-xs text-gray-500">Para: {{ selectedTargetUsers.length > 0 && selectedTargetUsers[0].email ? selectedTargetUsers[0].email : 'empleado@dominio.com' }}</p>
+                      </div>
+                    </div>
+                    <h2 class="text-xl font-bold">{{ form.subject || '(Sin Asunto)' }}</h2>
+                  </div>
+                  <div class="p-6 text-sm leading-relaxed whitespace-pre-wrap flex-1 overflow-y-auto">
+                    {{ form.body || '(El contenido de tu correo electrónico se mostrará aquí)' }}
+                  </div>
+                </div>
+
+                <!-- PREVIEW: SMS -->
+                <div v-if="form.vector === 'sms'" class="w-[300px] bg-[#f4f4f5] rounded-[2.5rem] border-[12px] border-[#27272a] h-[550px] shadow-2xl flex flex-col overflow-hidden relative">
+                  <!-- Notch -->
+                  <div class="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-6 bg-[#27272a] rounded-b-xl z-10"></div>
+                  
+                  <div class="bg-[#f4f4f5] px-4 pt-10 pb-2 border-b border-gray-200 flex flex-col items-center">
+                    <div class="w-12 h-12 rounded-full bg-gray-300 flex items-center justify-center mb-1">
+                      <i class="fa-solid fa-user text-gray-500 text-xl"></i>
+                    </div>
+                    <p class="text-xs text-black font-semibold">Desconocido</p>
+                  </div>
+                  
+                  <div class="flex-1 p-4 flex flex-col justify-end overflow-y-auto">
+                    <div class="flex flex-col items-start gap-1">
+                      <span class="text-[10px] text-gray-400 ml-2">Hoy {{ new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) }}</span>
+                      <div class="bg-[#e4e4e7] text-black px-4 py-3 rounded-2xl rounded-bl-sm text-[13px] leading-relaxed shadow-sm whitespace-pre-wrap max-w-[85%]">
+                        {{ form.body || '(El contenido de tu SMS se mostrará aquí)' }}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
               </div>
             </div>
           </div>
@@ -285,6 +357,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import SelectTargetsModal from '../components/modals/SelectTargetsModal.vue'
+import { GRAPHQL_URL } from '@/config/api'
 
 // --- Interfaces ---
 interface FormData {
@@ -299,6 +372,7 @@ const step = ref(1)
 const showTargetModal = ref(false)
 const isGenerating = ref(false)
 const isDeploying = ref(false)
+const activeTab = ref<'editor' | 'preview'>('editor') // NUEVO ESTADO PARA LAS TABS
 
 const selectDay = (day: { date: number | string; isCurrentMonth: boolean }) => {
   if (day.isCurrentMonth && typeof day.date === 'number') {
@@ -327,7 +401,7 @@ const organizacionId = computed(() => admin.value.id_organizacion || '')
 // --- Datos OSINT (para el panel e IA) ---
 const organizationDomain = ref('')
 const exposedEmails = ref<string[]>([])
-const latestOsintLogId = ref<string>('') // Guardamos el ID del log OSINT
+const latestOsintLogId = ref<string>('') 
 
 const getDomainFromEmail = (email: string) => {
   if (!email) return ''
@@ -413,27 +487,27 @@ const loadOsintData = async () => {
   }
 
   try {
-    const response = await fetch('http://localhost:4000/graphql', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${localStorage.getItem('ciso_token')}`,
-  },
-  body: JSON.stringify({
-    query: `
-      mutation OsintScan($dominio: String!, $organizacionId: ID!) {
-        osintScan(dominio: $dominio, organizacionId: $organizacionId) {
-          id           
-          fuente
-          tipo_hallazgo
-          detalle_json
-        }
-      }
-    `,
-    variables: {
-      dominio: activeDomain,
-      organizacionId: organizacionId.value,
-    },
+    const response = await fetch(GRAPHQL_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('ciso_token')}`,
+      },
+      body: JSON.stringify({
+        query: `
+          mutation OsintScan($dominio: String!, $organizacionId: ID!) {
+            osintScan(dominio: $dominio, organizacionId: $organizacionId) {
+              id           
+              fuente
+              tipo_hallazgo
+              detalle_json
+            }
+          }
+        `,
+        variables: {
+          dominio: activeDomain,
+          organizacionId: organizacionId.value,
+        },
       }),
     })
 
@@ -446,11 +520,11 @@ const loadOsintData = async () => {
     const emails: string[] = []
 
     if (logs.length > 0 && logs[0].id) {
-  latestOsintLogId.value = logs[0].id
-  console.log(' Log OSINT asignado:', latestOsintLogId.value)
-} else {
-  console.warn(' No se obtuvo un ID de OSINT en el escaneo.')
-}
+      latestOsintLogId.value = logs[0].id
+      console.log(' Log OSINT asignado:', latestOsintLogId.value)
+    } else {
+      console.warn(' No se obtuvo un ID de OSINT en el escaneo.')
+    }
 
     logs.forEach((log: any) => {
       const detalle = log.detalle_json || {}
@@ -467,7 +541,7 @@ const loadOsintData = async () => {
   }
 }
 
-// --- Generar contenido con IA (CORREGIDO) ---
+// --- Generar contenido con IA ---
 const generateContent = async () => {
   if (!latestOsintLogId.value) {
     alert('No se encontraron registros OSINT válidos para generar la campaña.')
@@ -476,7 +550,6 @@ const generateContent = async () => {
 
   isGenerating.value = true
 
-  // Tomamos los datos del primer usuario objetivo seleccionado
   const primerUsuario = selectedTargetUsers.value[0] || {}
   const departamento = primerUsuario.departamento || 'General'
   const nombreObjetivo = primerUsuario.nombre || primerUsuario.nombre_completo || ''
@@ -484,7 +557,7 @@ const generateContent = async () => {
   const tipoSimulacion = form.value.vector === 'sms' ? 'Smishing' : 'Phishing'
 
   try {
-    const response = await fetch('http://localhost:4000/graphql', {
+    const response = await fetch(GRAPHQL_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -545,8 +618,12 @@ const handleApplyTargets = (ids: string[], users: any[]) => {
 
 // --- Desplegar campaña ---
 const deployCampaign = async () => {
-  if (!form.value.name || selectedTargets.value.length === 0 || !form.value.subject || !form.value.body) {
+  if (!form.value.name || selectedTargets.value.length === 0 || !form.value.body) {
     alert('Completa todos los campos obligatorios.')
+    return
+  }
+  if (form.value.vector === 'email' && !form.value.subject) {
+    alert('Completa el asunto para la campaña de email.')
     return
   }
   if (!selectedDay.value) {
@@ -568,7 +645,7 @@ const deployCampaign = async () => {
 
   isDeploying.value = true
   try {
-    const responseCampaign = await fetch('http://localhost:4000/graphql', {
+    const responseCampaign = await fetch(GRAPHQL_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -605,7 +682,7 @@ const deployCampaign = async () => {
     const campaignId = resultCampaign.data.crearCampaign.id
     alert(`Campaña "${resultCampaign.data.crearCampaign.nombre}" creada exitosamente. ID: ${campaignId}`)
 
-    const asunto = form.value.subject
+    const asunto = form.value.subject || ''
     const contenido = form.value.body
     let enviosExitosos = 0
 
@@ -613,7 +690,7 @@ const deployCampaign = async () => {
       const trackingCode = crypto.randomUUID()
 
       try {
-        const responseEnvio = await fetch('http://localhost:4000/graphql', {
+        const responseEnvio = await fetch(GRAPHQL_URL, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -654,6 +731,7 @@ const deployCampaign = async () => {
     form.value = { name: '', vector: 'email', subject: '', body: '' }
     selectedTargets.value = []
     selectedTargetUsers.value = []
+    activeTab.value = 'editor'
     step.value = 1
 
   } catch (error: any) {
@@ -667,6 +745,15 @@ const deployCampaign = async () => {
 watch(step, (newStep) => {
   if (newStep === 2) {
     loadOsintData()
+    // Resetear a editor si regresamos al paso 2
+    activeTab.value = 'editor'
+  }
+})
+
+// Watcher para limpiar el asunto si cambian a SMS
+watch(() => form.value.vector, (newVector) => {
+  if (newVector === 'sms') {
+    form.value.subject = ''
   }
 })
 </script>
