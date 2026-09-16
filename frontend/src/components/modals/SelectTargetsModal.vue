@@ -17,6 +17,13 @@
         </button>
       </div>
 
+      <div v-if="requiresPhone" class="mx-6 mt-4 flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+        <i class="fa-solid fa-mobile-screen mt-0.5 text-amber-400"></i>
+        <p class="text-xs leading-5 text-amber-100">
+          Esta campaña es de Smishing. Solo puedes seleccionar empleados con teléfono registrado en formato internacional.
+        </p>
+      </div>
+
       <!-- Barra de búsqueda -->
       <div class="px-6 py-3 border-b border-[#434655] flex items-center gap-4 shrink-0">
         <div class="relative flex-1">
@@ -50,6 +57,7 @@
                 />
               </th>
               <th class="px-6 py-3 text-[10px] font-bold uppercase text-[#8d90a0] tracking-widest">Empleado</th>
+              <th class="px-6 py-3 text-[10px] font-bold uppercase text-[#8d90a0] tracking-widest">Teléfono</th>
               <th class="px-6 py-3 text-[10px] font-bold uppercase text-[#8d90a0] tracking-widest">Departamento</th>
               <th class="px-6 py-3 text-[10px] font-bold uppercase text-[#8d90a0] tracking-widest">Cargo</th>
               <th class="px-6 py-3 text-[10px] font-bold uppercase text-[#8d90a0] tracking-widest">Score</th>
@@ -62,6 +70,7 @@
                   type="checkbox" 
                   :value="user.id"
                   v-model="selectedIds"
+                  :disabled="requiresPhone && !user.telefono"
                   class="w-4 h-4 bg-[#11131b] border-[#434655] rounded focus:ring-blue-500 focus:ring-1"
                 />
               </td>
@@ -76,6 +85,10 @@
                   </div>
                 </div>
               </td>
+              <td class="px-6 py-3 text-sm">
+                <span v-if="user.telefono" class="text-[#c3c6d7]">{{ user.telefono }}</span>
+                <span v-else class="rounded border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-[10px] font-bold text-amber-400">Sin teléfono</span>
+              </td>
               <td class="px-6 py-3 text-sm text-[#c3c6d7]">{{ user.departamento || 'Sin asignar' }}</td>
               <td class="px-6 py-3 text-sm text-[#c3c6d7]">{{ user.cargo || 'Sin cargo' }}</td>
               <td class="px-6 py-3">
@@ -85,7 +98,7 @@
               </td>
             </tr>
             <tr v-if="filteredUsers.length === 0">
-              <td colspan="5" class="px-6 py-8 text-center text-[#8d90a0]">
+              <td colspan="6" class="px-6 py-8 text-center text-[#8d90a0]">
                 <i class="fa-solid fa-users-slash text-2xl block mb-2"></i>
                 No se encontraron empleados.
               </td>
@@ -124,6 +137,7 @@ interface Usuario {
   id: string
   nombre: string
   email: string
+  telefono?: string | null
   departamento: string | null
   cargo: string | null
   risk_score: number
@@ -134,6 +148,7 @@ interface Usuario {
 const props = defineProps<{
   organizacionId: string
   preselectedIds?: string[]
+  requiresPhone?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -153,13 +168,19 @@ const filteredUsers = computed(() => {
   return users.value.filter(u =>
     u.nombre.toLowerCase().includes(s) ||
     u.email.toLowerCase().includes(s) ||
+    (u.telefono && u.telefono.toLowerCase().includes(s)) ||
     (u.departamento && u.departamento.toLowerCase().includes(s))
   )
 })
 
+const selectableUsers = computed(() => props.requiresPhone
+  ? filteredUsers.value.filter(user => Boolean(user.telefono))
+  : filteredUsers.value
+)
+
 const allSelected = computed(() => {
-  return filteredUsers.value.length > 0 && 
-         filteredUsers.value.every(u => selectedIds.value.includes(u.id))
+  return selectableUsers.value.length > 0 &&
+         selectableUsers.value.every(u => selectedIds.value.includes(u.id))
 })
 
 const selectedUsers = computed(() => {
@@ -175,17 +196,21 @@ const getScoreClass = (score: number) => {
 
 const toggleAll = () => {
   if (allSelected.value) {
-    const filteredIds = filteredUsers.value.map(u => u.id)
+    const filteredIds = selectableUsers.value.map(u => u.id)
     selectedIds.value = selectedIds.value.filter(id => !filteredIds.includes(id))
   } else {
-    const filteredIds = filteredUsers.value.map(u => u.id)
+    const filteredIds = selectableUsers.value.map(u => u.id)
     const newIds = filteredIds.filter(id => !selectedIds.value.includes(id))
     selectedIds.value = [...selectedIds.value, ...newIds]
   }
 }
 
 const applySelection = () => {
-  emit('apply', selectedIds.value, selectedUsers.value)
+  const validIds = props.requiresPhone
+    ? selectedIds.value.filter(id => users.value.some(user => user.id === id && user.telefono))
+    : selectedIds.value
+  const validUsers = users.value.filter(user => validIds.includes(user.id))
+  emit('apply', validIds, validUsers)
   emit('close')
 }
 
@@ -205,6 +230,7 @@ const fetchUsers = async () => {
               id
               nombre
               email
+              telefono
               departamento
               cargo
               risk_score

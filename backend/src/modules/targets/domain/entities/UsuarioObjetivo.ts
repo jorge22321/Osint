@@ -4,6 +4,7 @@ export interface UsuarioObjetivo {
   id_organizacion: string;
   nombre: string;
   email: string;
+  telefono?: string | null;
   departamento?: string | null;
   cargo?: string | null;
   risk_score: number; // 0-100

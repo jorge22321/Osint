@@ -13,40 +13,55 @@ import { SupabaseEnvioRepository } from '../persistence/SupabaseEnvioRepository'
 import { CrearEnvioUseCase } from '../../application/useCases/CrearEnvioUseCase';
 import { NodemailerAdapter } from '../providers/NodemailerAdapter';
 import { TwilioSmsAdapter } from '../providers/TwilioSmsAdapter';
+import { GraphqlContext, requireAdmin, requireDb, requireOrganization } from '../../../../shared/infrastructure/graphql/authContext';
+import { SupabaseUsuarioObjetivoRepository } from '../../../targets/infrastructure/persistence/SupabaseUsuarioObjetivoRepository';
 
-const repo = new SupabaseCampaignRepository();
-const repoOsint = new SupabaseOsintRepository();
 const aiProvider = new MistralAdapter();
-const generarContenidoUseCase = new GenerarContenidoIaUseCase(aiProvider, repoOsint); 
 
 export const campaignResolvers = {
   Query: {
-    campaigns: async (_: any, { organizacionId }: any) => {
+    campaigns: async (_: any, { organizacionId }: any, context: GraphqlContext) => {
+      const admin = requireOrganization(context, organizacionId);
+      const repo = new SupabaseCampaignRepository(requireDb(context));
       const useCase = new ListarCampaignsUseCase(repo);
-      return await useCase.execute(organizacionId);
+      return await useCase.execute(admin.id_organizacion);
     },
-    campaign: async (_: any, { id }: any) => {
+    campaign: async (_: any, { id }: any, context: GraphqlContext) => {
+      const admin = requireAdmin(context);
+      const repo = new SupabaseCampaignRepository(requireDb(context));
       const useCase = new ObtenerCampaignUseCase(repo);
-      return await useCase.execute(id);
+      const campaign = await useCase.execute(id);
+      if (campaign && campaign.id_organizacion !== admin.id_organizacion) throw new Error('No tienes acceso a esta campaña.');
+      return campaign;
     },
   },
   Mutation: {
-    crearCampaign: async (_: any, { input, organizacionId }: any) => {
+    crearCampaign: async (_: any, { input, organizacionId }: any, context: GraphqlContext) => {
+      const admin = requireOrganization(context, organizacionId);
+      const repo = new SupabaseCampaignRepository(requireDb(context));
       if (!input.creado_por) {
         throw new Error('El campo creado_por es obligatorio en el input.');
       }
       const useCase = new CrearCampaignUseCase(repo);
       return await useCase.execute({
         ...input,
-        id_organizacion: organizacionId,
-        creado_por: input.creado_por,
+        id_organizacion: admin.id_organizacion,
+        creado_por: admin.id,
       });
     },
-    actualizarCampaign: async (_: any, { id, input }: any) => {
+    actualizarCampaign: async (_: any, { id, input }: any, context: GraphqlContext) => {
+      const admin = requireAdmin(context);
+      const repo = new SupabaseCampaignRepository(requireDb(context));
+      const campaign = await repo.buscarPorId(id);
+      if (!campaign || campaign.id_organizacion !== admin.id_organizacion) throw new Error('No tienes acceso a esta campaña.');
       const useCase = new ActualizarCampaignUseCase(repo);
-      return await useCase.execute(id, input);
+      return await useCase.execute(id, { ...input, creado_por: admin.id });
     },
-    eliminarCampaign: async (_: any, { id }: any) => {
+    eliminarCampaign: async (_: any, { id }: any, context: GraphqlContext) => {
+      const admin = requireAdmin(context);
+      const repo = new SupabaseCampaignRepository(requireDb(context));
+      const campaign = await repo.buscarPorId(id);
+      if (!campaign || campaign.id_organizacion !== admin.id_organizacion) throw new Error('No tienes acceso a esta campaña.');
       const useCase = new EliminarCampaignUseCase(repo);
       await useCase.execute(id);
       return true;
@@ -59,19 +74,34 @@ export const campaignResolvers = {
       tipoSimulacion: string;
       nombreObjetivo?: string;
       cargoObjetivo?: string;
-    }) => {
+    }, context: GraphqlContext) => {
+      const admin = requireAdmin(context);
+      const repoOsint = new SupabaseOsintRepository(requireDb(context));
+      const generarContenidoUseCase = new GenerarContenidoIaUseCase(aiProvider, repoOsint);
+      const osintLog = await repoOsint.obtenerLogPorId(args.osintLogId);
+      if (!osintLog || osintLog.id_organizacion !== admin.id_organizacion) throw new Error('No tienes acceso a este registro OSINT.');
       return await generarContenidoUseCase.execute(args);
     },
 
-    crearEnvio: async (_: any, { input }: { input: any }) => {
+    crearEnvio: async (_: any, { input }: { input: any }, context: GraphqlContext) => {
+      const admin = requireAdmin(context);
+      const db = requireDb(context);
+      const repo = new SupabaseCampaignRepository(db);
+      const targetRepo = new SupabaseUsuarioObjetivoRepository(db);
+      const [campaign, target] = await Promise.all([
+        repo.buscarPorId(input.id_campana),
+        targetRepo.buscarPorId(input.id_usuario_objetivo),
+      ]);
+      if (!campaign || campaign.id_organizacion !== admin.id_organizacion) throw new Error('No tienes acceso a esta campaña.');
+      if (!target || target.id_organizacion !== admin.id_organizacion) throw new Error('No tienes acceso a este empleado.');
       // Extraemos los datos que son para el UseCase pero NO van a la BD
       const { vector, contacto_destino, ...envioDataBD } = input;
 
-      const repoEnvio = new SupabaseEnvioRepository();
+      const repoEnvio = new SupabaseEnvioRepository(db);
       const emailProvider = new NodemailerAdapter();
       const smsProvider = new TwilioSmsAdapter();
       
-      const useCase = new CrearEnvioUseCase(repoEnvio, emailProvider, smsProvider);
+      const useCase = new CrearEnvioUseCase(repoEnvio, emailProvider, smsProvider, repo);
       
       return await useCase.execute(envioDataBD, vector, contacto_destino);
     },

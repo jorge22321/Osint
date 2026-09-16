@@ -14,5 +14,12 @@ export interface Envio {
 
 export interface IEnvioRepository {
   crear(envio: Omit<Envio, 'id'>): Promise<Envio>;
-  // Puedes añadir más métodos si los necesitas (listar, obtener por campaña, etc.)
+  actualizarEstado(id: string, estado: string, fechaEnvio?: Date | null): Promise<Envio>;
+  listarPendientesProgramados(hasta: Date): Promise<EnvioProgramado[]>;
+}
+
+export interface EnvioProgramado extends Envio {
+  id: string;
+  vector: 'email' | 'sms';
+  contacto_destino: string;
 }

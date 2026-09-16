@@ -2,10 +2,13 @@
 import { supabase } from '../../../../shared/infrastructure/database/supabase';
 import { IUsuarioObjetivoRepository } from '../../domain/ports/IUsuarioObjetivoRepository';
 import { UsuarioObjetivo } from '../../domain/entities/UsuarioObjetivo';
+import { SupabaseClient } from '@supabase/supabase-js';
 
 export class SupabaseUsuarioObjetivoRepository implements IUsuarioObjetivoRepository {
+  constructor(private db: SupabaseClient = supabase) {}
+
   async listar(organizacionId: string): Promise<UsuarioObjetivo[]> {
-    const { data, error } = await supabase
+    const { data, error } = await this.db
       .from('usuarios_objetivo')
       .select('*')
       .eq('id_organizacion', organizacionId)
@@ -22,12 +25,13 @@ export class SupabaseUsuarioObjetivoRepository implements IUsuarioObjetivoReposi
       throw new Error('El correo ya está registrado en esta organización.');
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await this.db
       .from('usuarios_objetivo')
       .insert([{
         id_organizacion: usuario.id_organizacion,
         nombre: usuario.nombre,
         email: usuario.email,
+        telefono: usuario.telefono || null,
         departamento: usuario.departamento || null,
         cargo: usuario.cargo || null,
         risk_score: usuario.risk_score ?? 100,
@@ -41,7 +45,7 @@ export class SupabaseUsuarioObjetivoRepository implements IUsuarioObjetivoReposi
   }
 
   async actualizar(id: string, data: Partial<UsuarioObjetivo>): Promise<UsuarioObjetivo> {
-    const { data: updated, error } = await supabase
+    const { data: updated, error } = await this.db
       .from('usuarios_objetivo')
       .update(data)
       .eq('id', id)
@@ -53,7 +57,7 @@ export class SupabaseUsuarioObjetivoRepository implements IUsuarioObjetivoReposi
   }
 
   async eliminar(id: string): Promise<void> {
-    const { error } = await supabase
+    const { error } = await this.db
       .from('usuarios_objetivo')
       .delete()
       .eq('id', id);
@@ -62,7 +66,7 @@ export class SupabaseUsuarioObjetivoRepository implements IUsuarioObjetivoReposi
   }
 
   async buscarPorEmail(email: string, organizacionId: string): Promise<UsuarioObjetivo | null> {
-    const { data, error } = await supabase
+    const { data, error } = await this.db
       .from('usuarios_objetivo')
       .select('*')
       .eq('email', email)
@@ -74,7 +78,7 @@ export class SupabaseUsuarioObjetivoRepository implements IUsuarioObjetivoReposi
   }
 
   async buscarPorId(id: string): Promise<UsuarioObjetivo | null> {
-    const { data, error } = await supabase
+    const { data, error } = await this.db
       .from('usuarios_objetivo')
       .select('*')
       .eq('id', id)

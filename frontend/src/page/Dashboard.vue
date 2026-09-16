@@ -6,6 +6,7 @@
       <div>
         <h2 class="text-2xl font-semibold text-white tracking-tight">Resumen Empresarial</h2>
         <p class="text-sm text-[#c3c6d7] mt-1">Métricas de postura defensiva e inteligencia de amenazas en tiempo real.</p>
+        <p v-if="lastUpdated" class="text-[10px] text-[#8d90a0] mt-1 font-mono">Actualizado: {{ lastUpdated }}</p>
       </div>
       <div class="flex gap-2">
         <button 
@@ -18,12 +19,24 @@
         </button>
         <button 
           @click="exportReport" 
-          class="bg-blue-600 text-white text-[11px] font-bold uppercase tracking-wider px-4 py-2 rounded-md hover:bg-blue-500 active:scale-95 transition-all flex items-center gap-2 shadow-lg shadow-blue-500/20"
+          :disabled="isLoading"
+          class="bg-blue-600 text-white text-[11px] font-bold uppercase tracking-wider px-4 py-2 rounded-md hover:bg-blue-500 active:scale-95 transition-all flex items-center gap-2 shadow-lg shadow-blue-500/20 disabled:opacity-50"
         >
           <i class="fa-solid fa-download"></i>
           Generar Reporte
         </button>
       </div>
+    </div>
+
+    <div v-if="errorMessage" class="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300 flex items-center gap-2">
+      <i class="fa-solid fa-circle-exclamation"></i>
+      <span class="flex-1">{{ errorMessage }}</span>
+      <button type="button" @click="errorMessage = ''" aria-label="Cerrar mensaje"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+
+    <div v-if="successMessage" class="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300 flex items-center gap-2">
+      <i class="fa-solid fa-circle-check"></i>
+      <span>{{ successMessage }}</span>
     </div>
 
     <!-- Metricas Principales (KPIs) -->
@@ -91,24 +104,22 @@
     <section class="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <div class="glass-card rounded-xl border border-[#434655] p-5 flex flex-col h-[320px]">
         <div class="flex justify-between items-start mb-4">
-          <h4 class="text-sm font-semibold text-white">Evolución de Riesgo</h4>
+          <h4 class="text-sm font-semibold text-white">Evolución de la tasa de clics</h4>
           <select v-model="selectedPeriod" class="bg-transparent border-none text-xs font-bold text-[#c3c6d7] focus:ring-0 cursor-pointer outline-none">
             <option value="6m" class="bg-[#1d1f27]">Últimos 6 Meses</option>
             <option value="1y" class="bg-[#1d1f27]">Último Año</option>
           </select>
         </div>
         <div class="flex-1 chart-grid relative rounded border border-[#434655]/50 overflow-hidden bg-[#11131b]/30">
-          <svg class="w-full h-full p-4" viewBox="0 0 400 200" preserveAspectRatio="none">
-            <path d="M 0 50 L 80 70 L 160 40 L 240 100 L 320 130 L 400 160" fill="none" stroke="#3b82f6" stroke-width="2"></path>
-            <circle cx="0" cy="50" fill="#60a5fa" r="4"></circle>
-            <circle cx="80" cy="70" fill="#60a5fa" r="4"></circle>
-            <circle cx="160" cy="40" fill="#60a5fa" r="4"></circle>
-            <circle cx="240" cy="100" fill="#60a5fa" r="4"></circle>
-            <circle cx="320" cy="130" fill="#60a5fa" r="4"></circle>
-            <circle cx="400" cy="160" fill="#60a5fa" r="4"></circle>
+          <svg class="w-full h-full px-4 pt-3 pb-8" viewBox="0 0 400 180" preserveAspectRatio="none" role="img" aria-label="Tasa mensual de clics de phishing">
+            <line v-for="guide in [25, 50, 75]" :key="guide" x1="20" x2="380" :y1="160 - (guide * 1.3)" :y2="160 - (guide * 1.3)" stroke="#434655" stroke-width="1" stroke-dasharray="4 4" />
+            <path v-if="chartPath" :d="chartPath" fill="none" stroke="#3b82f6" stroke-width="3" vector-effect="non-scaling-stroke"></path>
+            <circle v-for="point in chartPoints" :key="point.label" :cx="point.x" :cy="point.y" fill="#60a5fa" stroke="#11131b" stroke-width="2" r="4" vector-effect="non-scaling-stroke">
+              <title>{{ point.label }}: {{ point.rate }}% ({{ point.totalClics }}/{{ point.totalEnvios }} envíos)</title>
+            </circle>
           </svg>
-          <div class="absolute bottom-2 left-0 w-full px-4 flex justify-between text-[9px] font-mono text-[#c3c6d7] opacity-60 uppercase">
-            <span>Ene</span><span>Feb</span><span>Mar</span><span>Abr</span><span>May</span><span>Jun</span>
+          <div class="absolute bottom-2 left-0 w-full px-4 flex justify-between text-[8px] font-mono text-[#c3c6d7] opacity-70 uppercase">
+            <span v-for="point in visibleClickTrend" :key="point.label">{{ point.label }}</span>
           </div>
         </div>
       </div>
@@ -167,11 +178,6 @@
           </button>
         </form>
         
-        <div v-if="errorMessage" class="mt-3 text-xs text-red-400 flex items-center gap-1.5">
-          <i class="fa-solid fa-circle-exclamation"></i>
-          <span>{{ errorMessage }}</span>
-        </div>
-
         <div class="mt-4 flex items-center gap-6">
           <div class="flex items-center gap-2">
             <i class="fa-solid fa-circle-check text-emerald-400 text-xs"></i>
@@ -225,7 +231,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { GRAPHQL_URL } from '@/config/api'
 
 // Helper para extraer la Organización desde la sesión del usuario guardada en Login.vue
@@ -260,6 +266,8 @@ const scanDomain = ref('')
 const isScanning = ref(false)
 const isLoading = ref(false)
 const errorMessage = ref('')
+const successMessage = ref('')
+const lastUpdated = ref('')
 const selectedPeriod = ref('6m')
 
 // Métricas KPI (Reactivo)
@@ -272,14 +280,30 @@ const metrics = reactive({
 
 const departments = ref([])
 const osintLogs = ref([])
+const clickTrend = ref([])
+
+const visibleClickTrend = computed(() => selectedPeriod.value === '6m' ? clickTrend.value.slice(-6) : clickTrend.value)
+const chartPoints = computed(() => {
+  const points = visibleClickTrend.value
+  return points.map((point, index) => ({
+    ...point,
+    x: points.length === 1 ? 200 : 20 + (index * 360) / (points.length - 1),
+    y: 160 - (Math.min(100, Math.max(0, Number(point.rate))) * 1.3)
+  }))
+})
+const chartPath = computed(() => chartPoints.value.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' '))
 
 // Función ejecutora GraphQL
 async function executeGraphQL(query, variables = {}) {
   const response = await fetch(GRAPHQL_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${localStorage.getItem('ciso_token') || ''}`
+    },
     body: JSON.stringify({ query, variables })
   })
+  if (!response.ok) throw new Error(`El servidor respondió con estado ${response.status}.`)
   const result = await response.json()
   if (result.errors) {
     throw new Error(result.errors[0]?.message || 'Error en GraphQL')
@@ -301,6 +325,7 @@ const loadDashboardData = async () => {
 
   isLoading.value = true
   errorMessage.value = ''
+  successMessage.value = ''
   try {
     const query = `
       query GetDashboardMetrics($organizacionId: ID!) {
@@ -322,6 +347,12 @@ const loadDashboardData = async () => {
             detalle
             estadoBadging
           }
+          evolucionTasaClics {
+            label
+            rate
+            totalEnvios
+            totalClics
+          }
         }
       }
     `
@@ -334,6 +365,8 @@ const loadDashboardData = async () => {
       metrics.riskScore = res.nivelRiesgoPromedio
       departments.value = res.falloPorDepartamento
       osintLogs.value = res.logsOsintRecientes
+      clickTrend.value = res.evolucionTasaClics
+      lastUpdated.value = new Date().toLocaleString('es-PE')
     }
   } catch (err) {
     console.error('Error al cargar métricas del Dashboard:', err)
@@ -354,25 +387,32 @@ const startScan = async () => {
 
   isScanning.value = true
   errorMessage.value = ''
+  successMessage.value = ''
 
   try {
     const mutation = `
       mutation ExecutarOsintScan($dominio: String!, $organizacionId: ID!) {
-        osintScan(dominio: $dominio, organizacionId: $organizacionId) {
-          id
-          tipo_hallazgo
-          detalle_json
-          creado_en
+        osintScanDetailed(dominio: $dominio, organizacionId: $organizacionId) {
+          hallazgosEncontrados
+          nuevosGuardados
+          duplicadosOmitidos
+          proveedores { nombre estado }
         }
       }
     `
-    await executeGraphQL(mutation, { 
+    const scan = await executeGraphQL(mutation, {
       dominio: scanDomain.value.trim(),
       organizacionId: idOrganizacion.value 
     })
 
     scanDomain.value = ''
     await loadDashboardData()
+    const result = scan.osintScanDetailed
+    const failed = result.proveedores.filter((provider) => provider.estado === 'ERROR')
+    successMessage.value = failed.length
+      ? `Escaneo parcial: ${result.nuevosGuardados} hallazgo(s) nuevo(s). Fallaron: ${failed.map((provider) => provider.nombre).join(', ')}.`
+      : `Escaneo completado: ${result.nuevosGuardados} nuevo(s), ${result.duplicadosOmitidos} duplicado(s) omitido(s).`
+    window.setTimeout(() => { successMessage.value = '' }, 5000)
   } catch (err) {
     console.error('Error durante el escaneo OSINT:', err)
     errorMessage.value = err.message || 'No se pudo completar el escaneo OSINT.'
@@ -403,8 +443,37 @@ const getLogBadgeClass = (estado) => {
   }
 }
 
+const escapeCsv = (value) => {
+  let text = String(value ?? '')
+  if (/^[=+\-@]/.test(text)) text = `'${text}`
+  return `"${text.replaceAll('"', '""')}"`
+}
+
 const exportReport = () => {
-  alert('Generando y descargando el reporte consolidado...')
+  const rows = [
+    ['Reporte de postura defensiva'],
+    ['Generado', new Date().toLocaleString('es-PE')],
+    ['Organización', idOrganizacion.value],
+    [],
+    ['Métrica', 'Valor'],
+    ['Usuarios activos', metrics.totalUsers],
+    ['Tasa de clics', `${metrics.clickRate}%`],
+    ['Tasa de reportes', `${metrics.reportRate}%`],
+    ['Puntuación defensiva', `${metrics.riskScore}/100`],
+    [],
+    ['Departamento', 'Tasa de fallo'],
+    ...departments.value.map(dept => [dept.name, `${dept.rate}%`]),
+    [],
+    ['Fecha', 'Fuente', 'Tipo', 'Estado', 'Detalle'],
+    ...osintLogs.value.map(log => [log.hora, log.fuente, log.tipo_hallazgo, log.estadoBadging, log.detalle])
+  ]
+  const csv = `\uFEFF${rows.map(row => row.map(escapeCsv).join(';')).join('\r\n')}`
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `reporte-dashboard-${new Date().toISOString().slice(0, 10)}.csv`
+  link.click()
+  URL.revokeObjectURL(url)
 }
 
 onMounted(() => {

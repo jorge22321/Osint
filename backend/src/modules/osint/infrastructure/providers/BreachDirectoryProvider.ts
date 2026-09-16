@@ -56,14 +56,14 @@ export class BreachDirectoryProvider implements IOsintProvider {
     } catch (error: any) {
       if (error.response?.status === 404) {
         console.warn(` BreachDirectory: No se encontraron brechas para el dominio ${dominio}`);
+        return [];
       } else if (error.response?.status === 429) {
-        console.warn(' BreachDirectory: Límite de peticiones diarias alcanzado.');
+        throw new Error('BreachDirectory alcanzó su límite de peticiones.');
       } else if (error.code === 'ECONNABORTED') {
-        console.warn(' BreachDirectory: Timeout');
+        throw new Error('BreachDirectory excedió el tiempo de espera.');
       } else {
-        console.error(' BreachDirectory error:', error.message);
+        throw new Error(`BreachDirectory no disponible: ${error.message}`);
       }
-      return [];
     }
   }
 }

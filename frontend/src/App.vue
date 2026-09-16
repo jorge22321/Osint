@@ -1,7 +1,12 @@
 //frontend/src/App.vue
 <template>
   <router-view></router-view>
+  <NotificationModal />
 </template>
+
+<script setup>
+import NotificationModal from '@/components/NotificationModal.vue'
+</script>
 
 <style>
 /* Estilos globales para toda la app */

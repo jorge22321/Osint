@@ -2,10 +2,13 @@
 import { supabase } from '../../../../shared/infrastructure/database/supabase';
 import { ICampaignRepository } from '../../domain/ports/ICampaignRepository';
 import { Campaign } from '../../domain/entities/Campaign';
+import { SupabaseClient } from '@supabase/supabase-js';
 
 export class SupabaseCampaignRepository implements ICampaignRepository {
+  constructor(private db: SupabaseClient = supabase) {}
+
   async listar(organizacionId: string): Promise<Campaign[]> {
-    const { data, error } = await supabase
+    const { data, error } = await this.db
       .from('campanas')
       .select('*')
       .eq('id_organizacion', organizacionId)
@@ -16,7 +19,7 @@ export class SupabaseCampaignRepository implements ICampaignRepository {
   }
 
   async crear(data: Omit<Campaign, 'id' | 'creado_en'>): Promise<Campaign> {
-    const { data: created, error } = await supabase
+    const { data: created, error } = await this.db
       .from('campanas')
       .insert([{
         id_organizacion: data.id_organizacion,
@@ -34,7 +37,7 @@ export class SupabaseCampaignRepository implements ICampaignRepository {
   }
 
   async actualizar(id: string, data: Partial<Campaign>): Promise<Campaign> {
-    const { data: updated, error } = await supabase
+    const { data: updated, error } = await this.db
       .from('campanas')
       .update(data)
       .eq('id', id)
@@ -46,7 +49,7 @@ export class SupabaseCampaignRepository implements ICampaignRepository {
   }
 
   async eliminar(id: string): Promise<void> {
-    const { error } = await supabase
+    const { error } = await this.db
       .from('campanas')
       .delete()
       .eq('id', id);
@@ -55,7 +58,7 @@ export class SupabaseCampaignRepository implements ICampaignRepository {
   }
 
   async buscarPorId(id: string): Promise<Campaign | null> {
-    const { data, error } = await supabase
+    const { data, error } = await this.db
       .from('campanas')
       .select('*')
       .eq('id', id)

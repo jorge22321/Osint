@@ -5,6 +5,7 @@ export const targetsTypeDefs = `#graphql
     id_organizacion: ID!
     nombre: String!
     email: String!
+    telefono: String
     departamento: String
     cargo: String
     risk_score: Float!
@@ -15,6 +16,7 @@ export const targetsTypeDefs = `#graphql
   input CrearUsuarioInput {
     nombre: String!
     email: String!
+    telefono: String
     departamento: String
     cargo: String
     risk_score: Float

@@ -3,7 +3,7 @@
   <main class="flex-1 flex flex-col bg-[#14151a] text-white font-sans animate-in fade-in duration-500 h-full min-h-0"> 
     
     <!-- Barra de Filtros -->
-    <div class="px-6 py-4 flex items-center justify-between bg-[#1d1f27] shrink-0 border-b border-[#434655] relative z-20">
+    <div class="px-6 py-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-[#1d1f27] shrink-0 border-b border-[#434655] relative z-20">
       <div class="flex items-center gap-4 flex-wrap">
         
         <!-- Desplegable: Fuente de Amenaza -->
@@ -80,10 +80,14 @@
     ></div>
 
     <!-- Diseño de Panel Dividido (Split-Pane) -->
-    <div class="flex-1 flex overflow-hidden min-h-0">    
+    <div class="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0">
       
       <!-- Panel Izquierdo: Lista de Filtraciones -->
-      <div class="w-[400px] border-r border-[#434655] flex flex-col bg-[#1d1f27] overflow-y-auto custom-scrollbar flex-shrink-0">        
+      <div class="w-full lg:w-[400px] max-h-[42vh] lg:max-h-none border-b lg:border-b-0 lg:border-r border-[#434655] flex flex-col bg-[#1d1f27] overflow-y-auto custom-scrollbar flex-shrink-0">
+        <div class="sticky top-0 z-10 flex items-center justify-between border-b border-[#434655] bg-[#1d1f27] px-4 py-2 text-[11px] text-[#adb4ce]">
+          <span>{{ filteredLogs.length }} visibles</span>
+          <span>{{ logs.length }} de {{ totalLogs }} cargados</span>
+        </div>
         
         <!-- Estado Vacío (Sin Logs para los Filtros Seleccionados) -->
         <div v-if="filteredLogs.length === 0" class="p-8 text-center text-[#adb4ce] flex flex-col items-center justify-center my-auto">
@@ -122,6 +126,15 @@
           <!-- Divisor -->
           <div v-if="index !== filteredLogs.length - 1" class="h-[1px] w-full bg-[#434655]"></div>
         </template>
+
+        <button
+          v-if="hasMoreLogs"
+          :disabled="isLoadingLogs"
+          class="m-4 rounded-lg border border-[#434655] px-4 py-2 text-xs font-bold text-blue-300 hover:bg-[#2a2d39] disabled:opacity-50"
+          @click="fetchLogs(false)"
+        >
+          {{ isLoadingLogs ? 'Cargando...' : 'Cargar más registros' }}
+        </button>
       </div>
 
       <!-- Panel Derecho: Inspector de Evidencia -->
@@ -140,7 +153,7 @@
           
           <h1 class="text-2xl font-bold text-white mb-6">{{ selectedLog.title }}</h1>
           
-          <div class="grid grid-cols-3 gap-6 mb-8">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             <div class="p-4 bg-[#2a2d39] rounded-lg border border-[#434655]">
               <p class="text-xs text-[#c3c6d7] mb-1">Motivación del Actor</p>
               <p class="text-sm font-semibold text-white">{{ selectedLog.details.motivation }}</p>
@@ -157,7 +170,7 @@
           
           <div class="max-w-none">
             <h3 class="text-base font-semibold text-blue-400 mb-2">Análisis de Vulnerabilidad</h3>
-            <p class="text-sm text-[#adb4ce] leading-relaxed mb-4" v-html="selectedLog.details.analysis"></p>
+            <p class="text-sm text-[#adb4ce] leading-relaxed mb-4">{{ selectedLog.details.analysis }}</p>
             
             <div :class="['p-4 border-l-4 rounded-r-lg', selectedLog.impactBgClass]">
               <p class="text-sm font-medium" :class="selectedLog.impactTextClass">
@@ -197,7 +210,7 @@
           </div>
           
           <div class="p-6 text-sm font-mono overflow-x-auto custom-scrollbar">
-            <pre class="leading-relaxed"><code v-html="highlightedJSON(selectedLog.json)"></code></pre>
+            <pre class="leading-relaxed text-[#c9d2f0]"><code>{{ formattedJSON(selectedLog.json) }}</code></pre>
           </div>
         </div>
       </div>
@@ -214,6 +227,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue';
 import { GRAPHQL_URL } from '@/config/api';
+import { promptNotice, showNotice } from '@/composables/useNotification';
 
 // -------------------- 1. Definición de tipos --------------------
 interface OsintLog {
@@ -262,8 +276,13 @@ const admin = computed(() => {
 
 // -------------------- 3. Estados de Filtros e Interacción --------------------
 const isScanning = ref(false);
+const isLoadingLogs = ref(false);
 const logs = ref<DisplayLog[]>([]);
 const selectedLog = ref<DisplayLog | null>(null);
+const totalLogs = ref(0);
+const pageSize = 50;
+
+const hasMoreLogs = computed(() => logs.value.length < totalLogs.value);
 
 // Estados de Filtros
 const selectedSource = ref<string>('TODAS');
@@ -472,7 +491,9 @@ const formatearLogs = (rawLogs: OsintLog[]): DisplayLog[] => {
 };
 
 // -------------------- 6. Llamadas a la API --------------------
-const fetchLogs = async () => {
+const fetchLogs = async (reset = true) => {
+  if (isLoadingLogs.value) return;
+  isLoadingLogs.value = true;
   try {
     const response = await fetch(GRAPHQL_URL, {
       method: 'POST',
@@ -482,33 +503,52 @@ const fetchLogs = async () => {
       },
       body: JSON.stringify({
         query: `
-          query GetOsintLogs($organizacionId: ID!) {
-            osintLogs(organizacionId: $organizacionId) {
-              id
-              fuente
-              tipo_hallazgo
-              detalle_json
-              creado_en
+          query GetOsintLogs($organizacionId: ID!, $limit: Int!, $offset: Int!) {
+            osintLogsPage(organizacionId: $organizacionId, limit: $limit, offset: $offset) {
+              items {
+                id
+                fuente
+                tipo_hallazgo
+                detalle_json
+                creado_en
+              }
+              total
+              hasMore
             }
           }
         `,
-        variables: { organizacionId: admin.value.id_organizacion },
+        variables: {
+          organizacionId: admin.value.id_organizacion,
+          limit: pageSize,
+          offset: reset ? 0 : logs.value.length,
+        },
       }),
     });
 
     const result = await response.json();
+    if (result.errors) throw new Error(result.errors[0].message);
     if (result.data) {
-      logs.value = formatearLogs(result.data.osintLogs);
+      const page = result.data.osintLogsPage;
+      const formatted = formatearLogs(page.items);
+      logs.value = reset ? formatted : [...logs.value, ...formatted];
+      totalLogs.value = page.total;
       if (filteredLogs.value.length > 0) selectedLog.value = filteredLogs.value[0];
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching OSINT logs:', error);
+    showNotice({ type: 'error', message: error.message || 'No se pudieron cargar los logs OSINT.' });
+  } finally {
+    isLoadingLogs.value = false;
   }
 };
 
 const runScan = async () => {
   isScanning.value = true;
-  const dominio = prompt('Ingresa el dominio a escanear (ej: empresa.com)');
+  const dominio = await promptNotice('Ingresa el dominio que deseas analizar.', {
+    title: 'Nuevo escaneo OSINT',
+    inputPlaceholder: 'empresa.com',
+    confirmText: 'Iniciar escaneo'
+  });
   if (!dominio) {
     isScanning.value = false;
     return;
@@ -524,12 +564,16 @@ const runScan = async () => {
       body: JSON.stringify({
         query: `
           mutation OsintScan($dominio: String!, $organizacionId: ID!) {
-            osintScan(dominio: $dominio, organizacionId: $organizacionId) {
-              id
-              fuente
-              tipo_hallazgo
-              detalle_json
-              creado_en
+            osintScanDetailed(dominio: $dominio, organizacionId: $organizacionId) {
+              hallazgosEncontrados
+              nuevosGuardados
+              duplicadosOmitidos
+              proveedores {
+                nombre
+                estado
+                hallazgos
+                mensaje
+              }
             }
           }
         `,
@@ -542,35 +586,26 @@ const runScan = async () => {
 
     const result = await response.json();
     if (result.errors) {
-      alert('Error: ' + result.errors[0].message);
+      showNotice({ type: 'error', message: result.errors[0].message });
     } else {
-      const nuevosHallazgos = result.data.osintScan;
-      alert(`Escaneo completado. Se encontraron ${nuevosHallazgos.length} hallazgos.`);
-      
-      logs.value = formatearLogs(nuevosHallazgos);
-      if (filteredLogs.value.length > 0) {
-        selectedLog.value = filteredLogs.value[0];
-      } else {
-        selectedLog.value = null;
-      }
+      const scan = result.data.osintScanDetailed;
+      const failed = scan.proveedores.filter((provider: any) => provider.estado === 'ERROR');
+      showNotice({
+        type: failed.length ? 'warning' : 'success',
+        title: failed.length ? 'Escaneo completado parcialmente' : 'Escaneo completado',
+        message: `${scan.hallazgosEncontrados} hallazgo(s), ${scan.nuevosGuardados} nuevo(s) y ${scan.duplicadosOmitidos} duplicado(s) omitido(s).${failed.length ? ` Fallaron: ${failed.map((provider: any) => provider.nombre).join(', ')}.` : ''}`,
+      });
+      await fetchLogs(true);
     }
   } catch (error) {
     console.error('Error en escaneo OSINT:', error);
-    alert('No se pudo conectar con el servidor.');
+    showNotice({ type: 'error', message: 'No se pudo conectar con el servidor.' });
   } finally {
     isScanning.value = false;
   }
 };
 
-const highlightedJSON = (jsonObj: Record<string, any>) => {
-  if (!jsonObj) return '';
-  const jsonStr = JSON.stringify(jsonObj, null, 2);
-  return jsonStr
-    .replace(/"(.*?)":/g, '<span class="text-blue-400">"$1"</span>:')
-    .replace(/: "(.*?)"/g, ': <span class="text-green-400">"$1"</span>')
-    .replace(/: ([0-9]+(\.[0-9]+)?)/g, ': <span class="text-orange-400">$1</span>')
-    .replace(/: (true|false)/g, ': <span class="text-red-400">$1</span>');
-};
+const formattedJSON = (jsonObj: Record<string, any>) => jsonObj ? JSON.stringify(jsonObj, null, 2) : '';
 
 onMounted(() => {
   fetchLogs();

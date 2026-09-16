@@ -39,14 +39,14 @@ export class XposedOrNotProvider implements IOsintProvider {
     } catch (error: any) {
       if (error.response?.status === 404) {
         console.warn(` XposedOrNot: No se encontraron brechas para el dominio ${dominio}`);
+        return [];
       } else if (error.response?.status === 429) {
-        console.warn(' XposedOrNot: Límite de peticiones alcanzado (espera unos segundos)');
+        throw new Error('XposedOrNot alcanzó su límite de peticiones.');
       } else if (error.code === 'ECONNABORTED') {
-        console.warn(' XposedOrNot: Timeout');
+        throw new Error('XposedOrNot excedió el tiempo de espera.');
       } else {
-        console.error(' XposedOrNot error:', error.message);
+        throw new Error(`XposedOrNot no disponible: ${error.message}`);
       }
-      return [];
     }
   }
 }

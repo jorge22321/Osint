@@ -5,6 +5,7 @@ dotenv.config();
 
 const envSchema = z.object({
   PORT: z.string().default('4000'),
+  PUBLIC_BASE_URL: z.string().url().default('http://localhost:8080').transform(url => url.replace(/\/$/, '')),
   SUPABASE_URL: z.string().url(),
   SUPABASE_KEY: z.string().min(1),
   HUNTER_API_KEY: z.string().optional(),   

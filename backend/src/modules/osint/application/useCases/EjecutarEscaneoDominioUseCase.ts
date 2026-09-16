@@ -14,7 +14,13 @@ export class EjecutarEscaneoDominioUseCase {
       throw new Error('Dominio y organización son obligatorios.');
     }
 
-    const hallazgos = await this.osintProvider.escanear(dominio, organizacionId);
+    const dominioNormalizado = this.normalizarDominio(dominio);
+    const hallazgos = await this.osintProvider.escanear(dominioNormalizado, organizacionId);
+
+    return this.guardar(hallazgos, organizacionId);
+  }
+
+  async guardar(hallazgos: Awaited<ReturnType<IOsintProvider['escanear']>>, organizacionId: string): Promise<OsintLog[]> {
 
     const logs: OsintLog[] = hallazgos.map(h => ({
       id_organizacion: organizacionId,
@@ -25,7 +31,21 @@ export class EjecutarEscaneoDominioUseCase {
     }));
 
     // Guardar y obtener los registros con ID
-    const savedLogs = await this.osintRepository.guardarHallazgos(logs);
-    return savedLogs; // Ahora tienen ID
+    return await this.osintRepository.guardarHallazgos(logs);
+  }
+
+  normalizarDominio(dominio: string): string {
+    const value = dominio.trim().toLowerCase();
+    let hostname = value;
+    try {
+      hostname = new URL(value.includes('://') ? value : `https://${value}`).hostname;
+    } catch {
+      throw new Error('El dominio ingresado no es válido. Ejemplo: empresa.com');
+    }
+    hostname = hostname.replace(/^www\./, '').replace(/\.$/, '');
+    if (!/^(?=.{4,253}$)(?!-)(?:[a-z0-9-]{1,63}\.)+[a-z]{2,63}$/i.test(hostname)) {
+      throw new Error('El dominio ingresado no es válido. Ejemplo: empresa.com');
+    }
+    return hostname;
   }
 }

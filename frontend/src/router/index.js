@@ -6,12 +6,18 @@ import Dashboard from '../page/Dashboard.vue'
 import Campaigns from '../page/Campaigns.vue'
 import Employees from '../page/Employees.vue'
 import OsintLogs from '../page/OsintLogs.vue'
+import Training from '../page/Training.vue'
 
 const routes = [
   {
     path: '/',
     name: 'Login',
     component: Login
+  },
+  {
+    path: '/training/:token',
+    name: 'Training',
+    component: Training
   },
   {
     path: '/app',

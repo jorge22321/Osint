@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
+    "test": "tsx --test src/modules/osint/application/useCases/EjecutarEscaneoDominioUseCase.test.ts src/modules/campaigns/application/useCases/CrearEnvioUseCase.test.ts",
     "start": "node dist/server.js"
   },
   "keywords": [],

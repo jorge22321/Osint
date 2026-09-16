@@ -15,6 +15,13 @@ export const dashboardTypeDefs = `#graphql
     estadoBadging: String!
   }
 
+  type EvolucionTasaClics {
+    label: String!
+    rate: Float!
+    totalEnvios: Int!
+    totalClics: Int!
+  }
+
   type DashboardMetrics {
     totalUsuarios: Int!
     tasaClics: Float!
@@ -22,6 +29,7 @@ export const dashboardTypeDefs = `#graphql
     nivelRiesgoPromedio: Float!
     falloPorDepartamento: [DepartamentoRiesgo!]!
     logsOsintRecientes: [OsintLogItem!]!
+    evolucionTasaClics: [EvolucionTasaClics!]!
   }
 
   extend type Query {

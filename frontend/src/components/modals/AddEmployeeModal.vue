@@ -26,11 +26,11 @@
             <div class="bg-[#3f465c] w-14 h-14 flex items-center justify-center rounded-full mb-4 group-hover:scale-110 transition-transform">
               <i class="fas fa-cloud-arrow-up text-[#b4c5ff] text-2xl"></i>
             </div>
-            <p class="text-[#e1e2ed] font-semibold mb-1">Arrastra y suelta tu archivo CSV / Excel aquí</p>
-            <p class="text-[#c3c6d7] text-sm">Límite 10MB por archivo • Máximo 5,000 filas</p>
+            <p class="text-[#e1e2ed] font-semibold mb-1">Arrastra y suelta tu archivo CSV aquí</p>
+            <p class="text-[#c3c6d7] text-sm">Límite 10MB • Columnas: nombre, email, telefono, departamento, cargo</p>
             <input 
               type="file" 
-              accept=".csv, .xlsx"
+              accept=".csv,text/csv"
               class="absolute inset-0 opacity-0 cursor-pointer" 
               @change="handleFileUpload"
             />
@@ -39,10 +39,10 @@
             <i class="fas fa-check-circle"></i> {{ uploadedCount }} usuarios cargados desde archivo.
           </div>
           <div class="mt-4 flex justify-center">
-            <a href="#" class="flex items-center gap-2 text-[#b4c5ff] hover:underline text-sm font-semibold">
+            <button type="button" @click="downloadCsvTemplate" class="flex items-center gap-2 text-[#b4c5ff] hover:underline text-sm font-semibold">
               <i class="fas fa-download text-lg"></i>
               Descargar Plantilla CSV
-            </a>
+            </button>
           </div>
         </section>
 
@@ -81,6 +81,19 @@
                   placeholder="juan@empresa.com" 
                   class="bg-transparent border-none focus:ring-0 text-[#e1e2ed] w-full p-0 placeholder:text-[#8d90a0] outline-none"
                   required
+                />
+              </div>
+            </div>
+
+            <div class="md:col-span-2 space-y-1.5 group security-glow">
+              <label class="text-xs font-bold text-[#c3c6d7] uppercase tracking-widest px-1">Teléfono para Smishing <span class="normal-case text-[#8d90a0]">(opcional)</span></label>
+              <div class="flex items-center gap-4 bg-[#191b23] border border-[#434655] p-3 rounded-lg group-focus-within:border-[#b4c5ff] transition-all">
+                <i class="fas fa-mobile-screen text-[#8d90a0] text-sm"></i>
+                <input
+                  v-model="manualForm.telefono"
+                  type="tel"
+                  placeholder="+51 999 999 999"
+                  class="bg-transparent border-none focus:ring-0 text-[#e1e2ed] w-full p-0 placeholder:text-[#8d90a0] outline-none"
                 />
               </div>
             </div>
@@ -141,6 +154,7 @@
               <div>
                 <span class="text-[#e1e2ed] font-medium">{{ user.nombre }}</span>
                 <span class="text-[#8d90a0] ml-2">{{ user.email }}</span>
+                <span v-if="user.telefono" class="text-[#8d90a0] ml-2">{{ user.telefono }}</span>
                 <span class="text-[#8d90a0] ml-2 text-xs">{{ user.departamento }} • {{ user.cargo }}</span>
               </div>
               <button @click="removePendingUser(idx)" class="text-red-400 hover:text-red-300 transition-colors">
@@ -179,11 +193,14 @@
 
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
+import { showNotice } from '@/composables/useNotification'
+import { isValidInternationalPhone, normalizePhone } from '@/utils/phone'
 
 // --- Tipos ---
 interface UsuarioInput {
   nombre: string
   email: string
+  telefono?: string
   departamento: string
   cargo: string
 }
@@ -198,6 +215,7 @@ const emit = defineEmits<{
 const manualForm = reactive<UsuarioInput>({
   nombre: '',
   email: '',
+  telefono: '',
   departamento: '',
   cargo: ''
 })
@@ -209,13 +227,26 @@ const uploadedCount = ref(0)
 const addManualUser = () => {
   // Validar campos
   if (!manualForm.nombre || !manualForm.email || !manualForm.departamento || !manualForm.cargo) {
-    alert('Todos los campos son obligatorios para agregar un usuario.')
+    showNotice({ type: 'warning', message: 'Todos los campos son obligatorios para agregar un usuario.' })
+    return
+  }
+  if (!isValidInternationalPhone(manualForm.telefono)) {
+    showNotice({ type: 'warning', message: 'El teléfono debe usar formato internacional, por ejemplo +51999999999.' })
+    return
+  }
+  const normalizedEmail = manualForm.email.trim().toLowerCase()
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+    showNotice({ type: 'warning', message: 'Ingresa un correo electrónico válido.' })
+    return
+  }
+  if (pendingUsers.value.some(user => user.email.toLowerCase() === normalizedEmail)) {
+    showNotice({ type: 'warning', message: 'Ese correo ya está en la lista de importación.' })
     return
   }
   // Agregar a la lista
-  pendingUsers.value.push({ ...manualForm })
+  pendingUsers.value.push({ ...manualForm, email: normalizedEmail, telefono: normalizePhone(manualForm.telefono) })
   // Limpiar formulario
-  Object.assign(manualForm, { nombre: '', email: '', departamento: '', cargo: '' })
+  Object.assign(manualForm, { nombre: '', email: '', telefono: '', departamento: '', cargo: '' })
 }
 
 // --- Eliminar usuario de la lista pendiente ---
@@ -223,48 +254,132 @@ const removePendingUser = (index: number) => {
   pendingUsers.value.splice(index, 1)
 }
 
+const parseCsvLine = (line: string, separator: string) => {
+  const values: string[] = []
+  let current = ''
+  let quoted = false
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i]
+    if (char === '"' && quoted && line[i + 1] === '"') {
+      current += '"'
+      i++
+    } else if (char === '"') {
+      quoted = !quoted
+    } else if (char === separator && !quoted) {
+      values.push(current.trim())
+      current = ''
+    } else {
+      current += char
+    }
+  }
+  values.push(current.trim())
+  return values
+}
+
+const downloadCsvTemplate = () => {
+  const content = '\uFEFFnombre,email,telefono,departamento,cargo\nJuan Pérez,juan@empresa.com,+51987654321,Finanzas,Analista'
+  const url = URL.createObjectURL(new Blob([content], { type: 'text/csv;charset=utf-8' }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = 'plantilla_empleados_osint.csv'
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
 // --- Manejo de archivo CSV ---
 const handleFileUpload = (event: Event) => {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
   if (!file) return
+  if (file.size > 10 * 1024 * 1024) {
+    showNotice({ type: 'warning', message: 'El archivo supera el límite de 10MB.' })
+    input.value = ''
+    return
+  }
 
   const reader = new FileReader()
   reader.onload = (e) => {
     const text = e.target?.result as string
-    const lines = text.split('\n').filter(line => line.trim() !== '')
+    const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/).filter(line => line.trim() !== '')
     if (lines.length < 2) {
-      alert('El archivo no contiene datos válidos.')
+      showNotice({ type: 'warning', message: 'El archivo no contiene datos válidos.' })
       return
     }
-    // Asumimos primera línea como encabezados
-    const headers = lines[0].split(',').map(h => h.trim().toLowerCase())
+    const separator = lines[0].includes(';') && !lines[0].includes(',') ? ';' : ','
+    const headers = parseCsvLine(lines[0], separator).map(h => h.trim().toLowerCase())
+    const requiredHeaders = [
+      { label: 'nombre', aliases: ['nombre', 'name'] },
+      { label: 'email', aliases: ['email', 'correo'] },
+      { label: 'departamento', aliases: ['departamento', 'department'] },
+      { label: 'cargo', aliases: ['cargo', 'role'] },
+    ]
+    const missingHeaders = requiredHeaders
+      .filter(group => !group.aliases.some(alias => headers.includes(alias)))
+      .map(group => group.label)
+    if (missingHeaders.length > 0) {
+      showNotice({ type: 'error', title: 'CSV inválido', message: `Faltan columnas obligatorias: ${missingHeaders.join(', ')}.` })
+      input.value = ''
+      return
+    }
+    if (lines.length - 1 > 5000) {
+      showNotice({ type: 'warning', message: 'El CSV supera el máximo de 5,000 filas.' })
+      input.value = ''
+      return
+    }
     const usuarios: UsuarioInput[] = []
+    const rowErrors: string[] = []
+    const emails = new Set(pendingUsers.value.map(user => user.email.toLowerCase()))
 
     for (let i = 1; i < lines.length; i++) {
-      const values = lines[i].split(',').map(v => v.trim())
-      if (values.length < 4) continue
+      const values = parseCsvLine(lines[i], separator)
       const obj: any = {}
       headers.forEach((h, idx) => {
         obj[h] = values[idx] || ''
       })
-      // Mapear a campos esperados
-      usuarios.push({
+      const usuario: UsuarioInput = {
         nombre: obj['nombre'] || obj['name'] || '',
-        email: obj['email'] || obj['correo'] || '',
+        email: (obj['email'] || obj['correo'] || '').toLowerCase(),
+        telefono: normalizePhone(obj['telefono'] || obj['teléfono'] || obj['phone'] || obj['celular'] || ''),
         departamento: obj['departamento'] || obj['department'] || '',
         cargo: obj['cargo'] || obj['role'] || '',
-      })
+      }
+      if (!usuario.nombre || !usuario.email || !usuario.departamento || !usuario.cargo) {
+        rowErrors.push(`Fila ${i + 1}: faltan campos obligatorios`)
+        continue
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(usuario.email)) {
+        rowErrors.push(`Fila ${i + 1}: correo inválido`)
+        continue
+      }
+      if (!isValidInternationalPhone(usuario.telefono)) {
+        rowErrors.push(`Fila ${i + 1}: teléfono inválido`)
+        continue
+      }
+      if (emails.has(usuario.email)) {
+        rowErrors.push(`Fila ${i + 1}: correo duplicado en la lista`)
+        continue
+      }
+      emails.add(usuario.email)
+      usuarios.push(usuario)
     }
     if (usuarios.length > 0) {
       // Añadir a la lista pendiente
       pendingUsers.value = [...pendingUsers.value, ...usuarios]
       uploadedCount.value = usuarios.length
       // Mostrar mensaje
-      alert(`Se cargaron ${usuarios.length} usuarios desde el archivo.`)
+      showNotice({
+        type: rowErrors.length ? 'warning' : 'success',
+        title: 'CSV procesado',
+        message: `${usuarios.length} fila(s) válida(s).${rowErrors.length ? ` ${rowErrors.length} fila(s) omitida(s): ${rowErrors.slice(0, 3).join('; ')}${rowErrors.length > 3 ? '; ...' : ''}` : ''}`
+      })
     } else {
-      alert('No se encontraron usuarios válidos en el archivo.')
+      showNotice({ type: 'warning', message: 'No se encontraron usuarios válidos en el archivo.' })
     }
+    input.value = ''
+  }
+  reader.onerror = () => {
+    showNotice({ type: 'error', message: 'No se pudo leer el archivo CSV.' })
+    input.value = ''
   }
   reader.readAsText(file)
 }
@@ -272,7 +387,7 @@ const handleFileUpload = (event: Event) => {
 // --- Botón importar ---
 const handleImport = () => {
   if (pendingUsers.value.length === 0) {
-    alert('No hay usuarios para importar.')
+    showNotice({ type: 'warning', message: 'No hay usuarios para importar.' })
     return
   }
   // Emitir todos los usuarios pendientes

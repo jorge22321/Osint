@@ -33,9 +33,9 @@ export class HibpProvider implements IOsintProvider {
         },
         id_usuario_objetivo: null,
       }));
-    } catch (error) {
-      console.error('HIBP error:', error);
-      return [];
+    } catch (error: any) {
+      if (error.response?.status === 404) return [];
+      throw new Error(`HIBP no disponible: ${error.response?.status || error.message}`);
     }
   }
 }

@@ -40,10 +40,10 @@ export class ShodanProvider implements IOsintProvider {
       // Si el dominio no tiene registros públicos o Shodan no lo tiene indexado
       if (error.response?.status === 404) {
         console.warn(`⚠️ Shodan: No hay datos de vulnerabilidades públicas para este dominio.`);
+        return [];
       } else {
-        console.error(`❌ Shodan error:`, error.message);
+        throw new Error(`Shodan no disponible: ${error.message}`);
       }
-      return [];
     }
   }
 }

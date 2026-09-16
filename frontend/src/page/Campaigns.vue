@@ -73,6 +73,21 @@
                   <i class="fa-solid fa-comment-sms"></i> Smishing SMS
                 </button>
               </div>
+              <div
+                v-if="form.vector === 'sms'"
+                class="mt-2 flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-amber-100"
+              >
+                <i class="fa-solid fa-mobile-screen mt-0.5 text-amber-400"></i>
+                <div>
+                  <p class="text-xs font-bold">Smishing requiere número telefónico</p>
+                  <p class="mt-1 text-[11px] leading-5 text-amber-200/80">
+                    Cada empleado debe tener un número con código de país, por ejemplo +51 999 999 999.
+                    <span v-if="targetsWithoutPhone.length > 0" class="font-bold text-amber-300">
+                      {{ targetsWithoutPhone.length }} seleccionado(s) todavía no tienen teléfono.
+                    </span>
+                  </p>
+                </div>
+              </div>
             </div>
 
             <!-- Selector de destinatarios (ahora con modal) -->
@@ -271,7 +286,7 @@
               <label class="text-[10px] font-bold text-[#8d90a0] uppercase tracking-widest">Programar Fecha de Envío</label>
               <div class="bg-[#11131b] border border-[#434655] rounded-xl p-6">
                 <div class="flex items-center justify-between mb-6">
-                  <span class="font-bold text-sm">{{ currentMonth }} {{ currentYear }}</span>
+                  <span class="font-bold text-sm">{{ currentMonthName }} {{ currentYear }}</span>
                   <div class="flex gap-2">
                     <i class="fa-solid fa-chevron-left text-xs cursor-pointer hover:text-blue-500" @click="prevMonth"></i>
                     <i class="fa-solid fa-chevron-right text-xs cursor-pointer hover:text-blue-500" @click="nextMonth"></i>
@@ -295,6 +310,22 @@
                     {{ day.date }}
                   </span>
                 </div>
+                <div class="mt-6 border-t border-[#434655] pt-5">
+                  <label for="scheduled-time" class="mb-2 block text-[10px] font-bold uppercase tracking-widest text-[#8d90a0]">
+                    Hora de envío
+                  </label>
+                  <div class="flex items-center gap-3 rounded-lg border border-[#434655] bg-[#1d1f27] px-4 py-3 focus-within:border-blue-500">
+                    <i class="fa-regular fa-clock text-blue-400"></i>
+                    <input
+                      id="scheduled-time"
+                      v-model="selectedTime"
+                      type="time"
+                      step="60"
+                      class="w-full bg-transparent text-sm font-semibold text-[#e1e2ed] outline-none [color-scheme:dark]"
+                    />
+                  </div>
+                  <p class="mt-2 text-[10px] text-[#8d90a0]">Zona horaria del navegador: {{ browserTimeZone }}</p>
+                </div>
               </div>
             </div>
 
@@ -305,8 +336,12 @@
               <div class="text-center">
                 <h4 class="text-xl font-bold text-[#e1e2ed] mb-2">Listo para el Despliegue</h4>
                 <p class="text-xs text-[#8d90a0] max-w-xs leading-relaxed">
-                  La campaña se pondrá en cola en nuestro clúster Redis de alta disponibilidad. El envío comenzará automáticamente.
+                  Los mensajes quedarán en cola y se enviarán automáticamente en la fecha y hora seleccionadas.
                 </p>
+                <div v-if="scheduledDateLabel" class="mt-4 rounded-lg border border-blue-500/20 bg-blue-500/10 px-4 py-3 text-xs text-blue-200">
+                  <i class="fa-regular fa-calendar-check mr-2 text-blue-400"></i>
+                  {{ scheduledDateLabel }}
+                </div>
               </div>
               <button 
                 @click="deployCampaign"
@@ -314,7 +349,7 @@
                 class="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-[#0c0e16] font-extrabold text-sm rounded-xl flex items-center justify-center gap-3 shadow-2xl shadow-emerald-500/20 hover:scale-[1.02] active:scale-95 transition-all uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <i :class="['fa-solid fa-paper-plane', isDeploying ? 'animate-pulse' : '']"></i>
-                {{ isDeploying ? 'Desplegando...' : 'Agendar Despliegue en Clúster' }}
+                {{ isDeploying ? 'Programando...' : 'Programar campaña' }}
               </button>
             </div>
           </div>
@@ -348,6 +383,7 @@
       v-if="showTargetModal"
       :organizacion-id="organizacionId"
       :preselected-ids="selectedTargets"
+      :requires-phone="form.vector === 'sms'"
       @close="showTargetModal = false"
       @apply="handleApplyTargets"
     />
@@ -358,6 +394,7 @@
 import { ref, computed, watch } from 'vue'
 import SelectTargetsModal from '../components/modals/SelectTargetsModal.vue'
 import { GRAPHQL_URL } from '@/config/api'
+import { showNotice } from '@/composables/useNotification'
 
 // --- Interfaces ---
 interface FormData {
@@ -390,6 +427,7 @@ const form = ref<FormData>({
 // --- Selección de destinatarios ---
 const selectedTargets = ref<string[]>([])
 const selectedTargetUsers = ref<any[]>([])
+const targetsWithoutPhone = computed(() => selectedTargetUsers.value.filter((user: any) => !user.telefono?.trim()))
 
 // --- Datos del administrador y organización ---
 const admin = computed(() => {
@@ -428,6 +466,25 @@ const getActiveTargetDomain = () => {
 const currentMonth = ref(new Date().getMonth())
 const currentYear = ref(new Date().getFullYear())
 const selectedDay = ref<number | null>(null)
+const getDefaultScheduledTime = () => {
+  const date = new Date(Date.now() + 30 * 60 * 1000)
+  date.setMinutes(Math.ceil(date.getMinutes() / 15) * 15, 0, 0)
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+}
+const selectedTime = ref(getDefaultScheduledTime())
+const browserTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Hora local'
+const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+const currentMonthName = computed(() => monthNames[currentMonth.value])
+const selectedDateTime = computed(() => {
+  if (!selectedDay.value || !selectedTime.value) return null
+  const [hour, minute] = selectedTime.value.split(':').map(Number)
+  const date = new Date(currentYear.value, currentMonth.value, selectedDay.value, hour, minute, 0, 0)
+  return Number.isNaN(date.getTime()) ? null : date
+})
+const scheduledDateLabel = computed(() => selectedDateTime.value?.toLocaleString('es-PE', {
+  dateStyle: 'full',
+  timeStyle: 'short'
+}) || '')
 
 // --- Computed: días del mes ---
 const daysInMonth = computed(() => {
@@ -466,11 +523,11 @@ const nextMonth = () => {
 // --- Navegación entre pasos ---
 const goToNextStep = () => {
   if (step.value === 1 && !form.value.name) {
-    alert('Por favor, ingresa un nombre para la campaña.')
+    showNotice({ type: 'warning', message: 'Por favor, ingresa un nombre para la campaña.' })
     return
   }
   if (step.value === 1 && selectedTargets.value.length === 0) {
-    alert('Selecciona al menos un empleado objetivo.')
+    showNotice({ type: 'warning', message: 'Selecciona al menos un empleado objetivo.' })
     return
   }
   step.value++
@@ -496,11 +553,9 @@ const loadOsintData = async () => {
       body: JSON.stringify({
         query: `
           mutation OsintScan($dominio: String!, $organizacionId: ID!) {
-            osintScan(dominio: $dominio, organizacionId: $organizacionId) {
-              id           
-              fuente
-              tipo_hallazgo
-              detalle_json
+            osintScanDetailed(dominio: $dominio, organizacionId: $organizacionId) {
+              hallazgosEncontrados
+              nuevosGuardados
             }
           }
         `,
@@ -516,7 +571,26 @@ const loadOsintData = async () => {
       throw new Error(result.errors[0].message)
     }
 
-    const logs = result.data?.osintScan || []
+    const logsResponse = await fetch(GRAPHQL_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('ciso_token')}`,
+      },
+      body: JSON.stringify({
+        query: `
+          query LatestOsintLogs($organizacionId: ID!) {
+            osintLogsPage(organizacionId: $organizacionId, limit: 100, offset: 0) {
+              items { id fuente tipo_hallazgo detalle_json }
+            }
+          }
+        `,
+        variables: { organizacionId: organizacionId.value },
+      }),
+    })
+    const logsResult = await logsResponse.json()
+    if (logsResult.errors) throw new Error(logsResult.errors[0].message)
+    const logs = logsResult.data?.osintLogsPage?.items || []
     const emails: string[] = []
 
     if (logs.length > 0 && logs[0].id) {
@@ -544,7 +618,7 @@ const loadOsintData = async () => {
 // --- Generar contenido con IA ---
 const generateContent = async () => {
   if (!latestOsintLogId.value) {
-    alert('No se encontraron registros OSINT válidos para generar la campaña.')
+    showNotice({ type: 'warning', message: 'No se encontraron registros OSINT válidos para generar la campaña.' })
     return
   }
 
@@ -603,7 +677,7 @@ const generateContent = async () => {
     form.value.subject = data.asunto
     form.value.body = data.contenido
   } catch (error: any) {
-    alert('Error al generar contenido: ' + error.message)
+    showNotice({ type: 'error', message: `Error al generar contenido: ${error.message}` })
   } finally {
     isGenerating.value = false
   }
@@ -619,15 +693,36 @@ const handleApplyTargets = (ids: string[], users: any[]) => {
 // --- Desplegar campaña ---
 const deployCampaign = async () => {
   if (!form.value.name || selectedTargets.value.length === 0 || !form.value.body) {
-    alert('Completa todos los campos obligatorios.')
+    showNotice({ type: 'warning', message: 'Completa todos los campos obligatorios.' })
     return
   }
   if (form.value.vector === 'email' && !form.value.subject) {
-    alert('Completa el asunto para la campaña de email.')
+    showNotice({ type: 'warning', message: 'Completa el asunto para la campaña de email.' })
+    return
+  }
+  if (step.value === 1 && form.value.vector === 'sms' && targetsWithoutPhone.value.length > 0) {
+    showNotice({
+      type: 'warning',
+      title: 'Teléfonos requeridos para Smishing',
+      message: `${targetsWithoutPhone.value.length} empleado(s) seleccionado(s) no tienen número telefónico. Regístralo con código de país antes de continuar.`
+    })
+    return
+  }
+  const objetivosSinTelefono = selectedTargetUsers.value.filter((user: any) => !user.telefono)
+  if (form.value.vector === 'sms' && objetivosSinTelefono.length > 0) {
+    showNotice({
+      type: 'warning',
+      title: 'Faltan números telefónicos',
+      message: `${objetivosSinTelefono.length} empleado(s) no tienen teléfono registrado. Agrégalo antes de desplegar una campaña de smishing.`
+    })
     return
   }
   if (!selectedDay.value) {
-    alert('Selecciona una fecha de envío.')
+    showNotice({ type: 'warning', message: 'Selecciona una fecha de envío.' })
+    return
+  }
+  if (!selectedTime.value) {
+    showNotice({ type: 'warning', message: 'Selecciona la hora de envío.' })
     return
   }
 
@@ -636,11 +731,15 @@ const deployCampaign = async () => {
   const adminId = adminData.id
 
   if (!orgId || !adminId) {
-    alert('No se encontró información de organización o administrador. Vuelve a iniciar sesión.')
+    showNotice({ type: 'error', message: 'No se encontró información de organización o administrador. Vuelve a iniciar sesión.' })
     return
   }
 
-  const scheduledDate = new Date(currentYear.value, currentMonth.value, selectedDay.value)
+  const scheduledDate = selectedDateTime.value
+  if (!scheduledDate || scheduledDate.getTime() <= Date.now()) {
+    showNotice({ type: 'warning', message: 'La fecha y hora de envío deben estar en el futuro.' })
+    return
+  }
   const isoDate = scheduledDate.toISOString()
 
   isDeploying.value = true
@@ -680,14 +779,14 @@ const deployCampaign = async () => {
     }
 
     const campaignId = resultCampaign.data.crearCampaign.id
-    alert(`Campaña "${resultCampaign.data.crearCampaign.nombre}" creada exitosamente. ID: ${campaignId}`)
-
     const asunto = form.value.subject || ''
     const contenido = form.value.body
     let enviosExitosos = 0
 
     for (const targetId of selectedTargets.value) {
       const trackingCode = crypto.randomUUID()
+      const targetUser = selectedTargetUsers.value.find((user: any) => user.id === targetId)
+      const contactoDestino = form.value.vector === 'sms' ? targetUser?.telefono : targetUser?.email
 
       try {
         const responseEnvio = await fetch(GRAPHQL_URL, {
@@ -712,6 +811,8 @@ const deployCampaign = async () => {
                 asunto_generado: asunto,
                 contenido_generado: contenido,
                 tracking_code: trackingCode,
+                vector: form.value.vector,
+                contacto_destino: contactoDestino,
               },
             },
           }),
@@ -726,16 +827,22 @@ const deployCampaign = async () => {
       }
     }
 
-    alert(`${enviosExitosos} de ${selectedTargets.value.length} envíos creados correctamente.`)
+    showNotice({
+      type: 'success',
+      title: 'Campaña desplegada',
+      message: `La campaña "${resultCampaign.data.crearCampaign.nombre}" fue creada correctamente.\n${enviosExitosos} de ${selectedTargets.value.length} envíos procesados.\nID: ${campaignId}`
+    })
 
     form.value = { name: '', vector: 'email', subject: '', body: '' }
     selectedTargets.value = []
     selectedTargetUsers.value = []
     activeTab.value = 'editor'
+    selectedDay.value = null
+    selectedTime.value = getDefaultScheduledTime()
     step.value = 1
 
   } catch (error: any) {
-    alert('Error al desplegar campaña: ' + error.message)
+    showNotice({ type: 'error', message: `Error al desplegar campaña: ${error.message}` })
   } finally {
     isDeploying.value = false
   }

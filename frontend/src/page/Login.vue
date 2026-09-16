@@ -111,6 +111,7 @@
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { GRAPHQL_URL } from '@/config/api'
+import { showNotice } from '@/composables/useNotification'
 
 const router = useRouter()
 // Estado del formulario
@@ -186,7 +187,11 @@ const handleLogin = async () => {
       localStorage.setItem('ciso_user', JSON.stringify(authData.admin))
 
       router.push('/app/dashboard')
-      alert(`Bienvenido de nuevo, ${authData.admin.nombre}`)
+      showNotice({
+        type: 'success',
+        title: 'Inicio de sesión exitoso',
+        message: `Bienvenido de nuevo, ${authData.admin.nombre}.`
+      })
     }
 
   } catch (error) {

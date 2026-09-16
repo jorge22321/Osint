@@ -1,14 +1,47 @@
-import { IEnvioRepository, Envio } from '../../domain/ports/IEnvioRepository';
+import { IEnvioRepository, Envio, EnvioProgramado } from '../../domain/ports/IEnvioRepository';
 import { ISmsProvider } from '../../domain/ports/ISmsProvider';
 import { IEmailProvider } from '../../domain/ports/IEmailProvider';
+import { ICampaignRepository } from '../../domain/ports/ICampaignRepository';
+import { env } from '../../../../config/env';
 
 
 export class CrearEnvioUseCase {
   constructor(
     private envioRepo: IEnvioRepository,
     private emailProvider: IEmailProvider,
-    private smsProvider: ISmsProvider
+    private smsProvider: ISmsProvider,
+    private campaignRepo: ICampaignRepository
   ) {}
+
+  private processingIds = new Set<string>();
+
+  private async despachar(envio: Envio, vector: string, contactoDestino: string): Promise<Envio> {
+    if (!envio.id) throw new Error('El envío debe estar persistido antes de despacharse.');
+    if (!contactoDestino) {
+      return this.envioRepo.actualizarEstado(envio.id, 'Fallido');
+    }
+
+    let envioExitoso = false;
+    try {
+      if (vector === 'email') {
+        if (!envio.asunto_generado) throw new Error('El asunto es obligatorio para email.');
+        envioExitoso = await this.emailProvider.enviarEmail(contactoDestino, envio.asunto_generado, envio.contenido_generado);
+      } else if (vector === 'sms') {
+        envioExitoso = await this.smsProvider.enviarSms(contactoDestino, envio.contenido_generado);
+      } else {
+        throw new Error('Vector no soportado. Debe ser "email" o "sms".');
+      }
+    } catch (error) {
+      console.error(`Error crítico al despachar el ${vector}:`, error);
+      envioExitoso = false;
+    }
+
+    return this.envioRepo.actualizarEstado(
+      envio.id,
+      envioExitoso ? 'Enviado' : 'Fallido',
+      envioExitoso ? new Date() : null
+    );
+  }
 
   async execute(
     envioData: Omit<Envio, 'id'>,
@@ -27,36 +60,48 @@ export class CrearEnvioUseCase {
       throw new Error('El código de tracking es obligatorio.');
     }
 
-    // 2. Inyectar tracking pixel si es email
+    // 2. Inyectar un enlace único para registrar el clic y abrir la capacitación.
     let contenidoFinal = envioData.contenido_generado;
+    const trackingUrl = `${env.PUBLIC_BASE_URL}/track/click/${encodeURIComponent(envioData.tracking_code)}`;
     if (vector === 'email') {
-      const pixelTracking = `<img src="${process.env.API_URL || 'http://localhost:3000'}/track/open/${envioData.tracking_code}" width="1" height="1" style="display:none;" />`;
-      contenidoFinal += pixelTracking;
+      const pixelTracking = `<img src="${env.PUBLIC_BASE_URL}/track/open/${encodeURIComponent(envioData.tracking_code)}" width="1" height="1" style="display:none;" alt="" />`;
+      const callToAction = `<p style="margin-top:24px"><a href="${trackingUrl}" style="display:inline-block;padding:12px 20px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">Revisar información</a></p>`;
+      contenidoFinal += `${callToAction}${pixelTracking}`;
+    } else {
+      contenidoFinal += `\n\nMás información: ${trackingUrl}`;
+    }
+    envioData.contenido_generado = contenidoFinal;
+
+    // 3. Persistir primero. Así el enlace ya existe cuando el destinatario lo abra.
+    envioData.estado = 'En Cola';
+    envioData.fecha_envio = null;
+    const envioCreado = await this.envioRepo.crear(envioData);
+
+    // 4. Respetar la fecha/hora de la campaña. Si ya venció, despachar ahora.
+    const campaign = await this.campaignRepo.buscarPorId(envioData.id_campana);
+    const scheduledAt = campaign?.fecha_programada ? new Date(campaign.fecha_programada) : new Date();
+    if (scheduledAt.getTime() <= Date.now()) {
+      return this.despachar(envioCreado, vector, contactoDestino);
     }
 
-    // 3. Despachar el mensaje
-    let envioExitoso = false;
-    try {
-      if (vector === 'email') {
-        if (!envioData.asunto_generado) throw new Error('El asunto es obligatorio para email.');
-        envioExitoso = await this.emailProvider.enviarEmail(contactoDestino, envioData.asunto_generado, contenidoFinal);
-      } else if (vector === 'sms') {
-        envioExitoso = await this.smsProvider.enviarSms(contactoDestino, contenidoFinal);
-      } else {
-        throw new Error('Vector no soportado. Debe ser "email" o "sms".');
+    return envioCreado;
+  }
+
+  async procesarPendientes(): Promise<number> {
+    const pendientes = await this.envioRepo.listarPendientesProgramados(new Date());
+    let procesados = 0;
+
+    for (const envio of pendientes) {
+      if (this.processingIds.has(envio.id)) continue;
+      this.processingIds.add(envio.id);
+      try {
+        await this.despachar(envio, envio.vector, envio.contacto_destino);
+        procesados++;
+      } finally {
+        this.processingIds.delete(envio.id);
       }
-    } catch (error) {
-      console.error(`Error crítico al despachar el ${vector}:`, error);
-      envioExitoso = false;
     }
 
-    // 4. Actualizar estado y fecha en base de datos
-    envioData.estado = envioExitoso ? 'Enviado' : 'Fallido';
-    if (envioExitoso) {
-      envioData.fecha_envio = new Date();
-    }
-
-    // 5. Guardar en Supabase
-    return await this.envioRepo.crear(envioData);
+    return procesados;
   }
 }

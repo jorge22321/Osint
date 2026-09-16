@@ -32,15 +32,12 @@ export class HunterProvider implements IOsintProvider {
             nombre: `${item.first_name || ''} ${item.last_name || ''}`.trim() || 'Nombre no disponible',
             cargo: cargo,
             fuente: item.sources?.[0]?.uri || 'Desconocida',
-            // Guardamos también datos adicionales por si acaso
-            raw: item,
           },
           id_usuario_objetivo: null,
         };
       });
-    } catch (error) {
-      console.error('HunterProvider error:', error);
-      return [];
+    } catch (error: any) {
+      throw new Error(`Hunter.io no disponible: ${error.response?.status || error.message}`);
     }
   }
 }

@@ -26,7 +26,7 @@
         <input 
           v-model="filters.search"
           class="w-full bg-[#11131b] border border-[#434655] rounded-lg py-2 pl-10 pr-4 text-sm text-[#e1e2ed] focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all" 
-          placeholder="Buscar por nombre, correo o rol..." 
+          placeholder="Buscar por nombre, correo, teléfono o rol..."
           type="text"
         />
       </div>
@@ -59,6 +59,7 @@
             <tr class="bg-[#32343d]/50 border-b border-[#434655]">
               <th class="px-6 py-4 text-[10px] font-bold uppercase text-[#8d90a0] tracking-widest">Empleado e Identidad</th>
               <th class="px-6 py-4 text-[10px] font-bold uppercase text-[#8d90a0] tracking-widest">Departamento / Rol</th>
+              <th class="px-6 py-4 text-[10px] font-bold uppercase text-[#8d90a0] tracking-widest">Teléfono</th>
               <th class="px-6 py-4 text-[10px] font-bold uppercase text-[#8d90a0] tracking-widest">Score de Riesgo</th>
               <th class="px-6 py-4 text-[10px] font-bold uppercase text-[#8d90a0] tracking-widest">Filtraciones OSINT</th>
               <th class="px-6 py-4 text-[10px] font-bold uppercase text-[#8d90a0] tracking-widest text-right">Acciones</th>
@@ -84,6 +85,10 @@
                 </div>
               </td>
               <td class="px-6 py-4">
+                <span v-if="emp.phone" class="font-mono text-xs text-[#e1e2ed]">{{ emp.phone }}</span>
+                <span v-else class="text-xs text-amber-400">Sin registrar</span>
+              </td>
+              <td class="px-6 py-4">
                 <div class="flex items-center gap-3">
                   <div class="relative w-10 h-10 flex items-center justify-center">
                     <svg class="w-full h-full -rotate-90">
@@ -106,13 +111,13 @@
                 </div>
               </td>
               <td class="px-6 py-4 text-right">
-                <button class="w-8 h-8 rounded border border-transparent hover:border-[#434655] hover:bg-[#32343d] text-[#8d90a0] hover:text-blue-400 transition-all flex items-center justify-center ml-auto">
-                  <i class="fa-solid fa-eye"></i>
+                <button title="Editar empleado" class="w-8 h-8 rounded border border-transparent hover:border-[#434655] hover:bg-[#32343d] text-[#8d90a0] hover:text-blue-400 transition-all flex items-center justify-center ml-auto" @click="editingEmployee = emp">
+                  <i class="fa-solid fa-pen"></i>
                 </button>
               </td>
             </tr>
             <tr v-if="filteredEmployees.length === 0">
-              <td colspan="5" class="px-6 py-8 text-center text-[#8d90a0] text-sm">
+              <td colspan="6" class="px-6 py-8 text-center text-[#8d90a0] text-sm">
                 <i class="fa-solid fa-users-slash text-3xl block mb-2 text-[#434655]"></i>
                 No se encontraron empleados. Agrega uno nuevo o carga un archivo CSV.
               </td>
@@ -179,6 +184,12 @@
       @close="showModal = false"
       @import="handleImportUsers"
     />
+    <EditEmployeeModal
+      v-if="editingEmployee"
+      :employee="editingEmployee"
+      @close="editingEmployee = null"
+      @save="handleUpdateEmployee"
+    />
 
   </div>
 </template>
@@ -186,12 +197,16 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import AddEmployeeModal from '../components/modals/AddEmployeeModal.vue' // Ajusta la ruta según tu estructura
+import EditEmployeeModal from '../components/modals/EditEmployeeModal.vue'
 import { GRAPHQL_URL } from '@/config/api'
+import { showNotice } from '@/composables/useNotification'
 
 // --- Tipos ---
 interface UsuarioInput {
   nombre: string
   email: string
+  phone: string
+  telefono?: string
   departamento: string
   cargo: string
 }
@@ -212,6 +227,7 @@ interface EmployeeDisplay {
 
 // --- Estado ---
 const showModal = ref(false)
+const editingEmployee = ref<EmployeeDisplay | null>(null)
 const filters = ref({ search: '', department: '', threat: '' })
 const employees = ref<EmployeeDisplay[]>([])
 
@@ -231,6 +247,7 @@ const filteredEmployees = computed(() => {
     result = result.filter(emp =>
       emp.name.toLowerCase().includes(s) ||
       emp.email.toLowerCase().includes(s) ||
+      emp.phone.toLowerCase().includes(s) ||
       emp.department.toLowerCase().includes(s) ||
       emp.role.toLowerCase().includes(s)
     )
@@ -274,6 +291,7 @@ const fetchEmployees = async () => {
               id
               nombre
               email
+              telefono
               departamento
               cargo
               risk_score
@@ -311,6 +329,7 @@ const fetchEmployees = async () => {
           id: u.id,
           name: u.nombre || 'Sin nombre',
           email: u.email || 'sin-email@ejemplo.com',
+          phone: u.telefono || '',
           department: u.departamento || 'Sin asignar',
           role: u.cargo || 'Sin cargo',
           score,
@@ -342,6 +361,7 @@ const createUser = async (user: UsuarioInput) => {
     input: {
       nombre: user.nombre,
       email: user.email,
+      telefono: user.telefono || null,
       departamento: user.departamento,
       cargo: user.cargo,
     },
@@ -363,21 +383,79 @@ const createUser = async (user: UsuarioInput) => {
   return result.data.crearUsuario
 }
 
+const updateUser = async (id: string, user: UsuarioInput) => {
+  const mutation = `
+    mutation ActualizarUsuario($id: ID!, $input: CrearUsuarioInput!) {
+      actualizarUsuario(id: $id, input: $input) {
+        id
+        nombre
+        email
+        telefono
+      }
+    }
+  `
+  const variables = {
+    id,
+    input: {
+      nombre: user.nombre,
+      email: user.email,
+      telefono: user.telefono || null,
+      departamento: user.departamento,
+      cargo: user.cargo,
+    },
+  }
+  const response = await fetch(GRAPHQL_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${localStorage.getItem('ciso_token')}`,
+    },
+    body: JSON.stringify({ query: mutation, variables }),
+  })
+  const result = await response.json()
+  if (result.errors) throw new Error(result.errors[0].message)
+  return result.data.actualizarUsuario
+}
+
+const handleUpdateEmployee = async (user: UsuarioInput) => {
+  if (!editingEmployee.value) return
+  try {
+    await updateUser(editingEmployee.value.id, user)
+    editingEmployee.value = null
+    await fetchEmployees()
+    showNotice({ type: 'success', title: 'Empleado actualizado', message: 'Los datos y el teléfono se guardaron correctamente.' })
+  } catch (error: any) {
+    showNotice({ type: 'error', message: `No se pudo actualizar: ${error.message}` })
+  }
+}
+
 // --- Manejar importación desde el modal ---
 const handleImportUsers = async (data: UsuarioInput | UsuarioInput[]) => {
-  try {
-    const usuarios = Array.isArray(data) ? data : [data]
-    for (const user of usuarios) {
-      await createUser(user)
+  const usuarios = Array.isArray(data) ? data : [data]
+  let created = 0
+  let updated = 0
+  const errors: string[] = []
+  for (const user of usuarios) {
+    try {
+      const existing = employees.value.find(emp => emp.email.toLowerCase() === user.email.toLowerCase())
+      if (existing) {
+        await updateUser(existing.id, user)
+        updated++
+      } else {
+        await createUser(user)
+        created++
+      }
+    } catch (error: any) {
+      errors.push(`${user.email}: ${error.message}`)
     }
-    // Refrescar lista
-    await fetchEmployees()
-    // Cerrar modal
-    showModal.value = false
-    alert(`✅ ${usuarios.length} usuario(s) importado(s) correctamente.`)
-  } catch (error: any) {
-    alert('❌ Error al importar: ' + error.message)
   }
+  await fetchEmployees()
+  showModal.value = false
+  showNotice({
+    type: errors.length ? 'warning' : 'success',
+    title: errors.length ? 'Importación parcial' : 'Importación completada',
+    message: `${created} creado(s), ${updated} actualizado(s).${errors.length ? ` ${errors.length} error(es): ${errors.slice(0, 2).join('; ')}` : ''}`,
+  })
 }
 
 // --- Carga inicial ---
