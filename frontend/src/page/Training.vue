@@ -34,7 +34,7 @@
                 <p class="text-xs font-bold uppercase tracking-[0.2em] text-amber-400">Simulación controlada</p>
                 <h1 class="mt-2 text-3xl font-bold text-white">Este enlace era una prueba de {{ channelName }}</h1>
                 <p class="mt-3 max-w-2xl text-sm leading-6 text-[#c3c6d7]">
-                  No se comprometió tu cuenta ni tu dispositivo. Esta actividad forma parte del programa interno de seguridad y busca ayudarte a reconocer señales de ingeniería social.
+                  No se comprometió tu cuenta ni tu dispositivo. {{ training.contenido?.introduction }}
                 </p>
               </div>
             </div>
@@ -43,7 +43,7 @@
 
         <section class="mt-6 grid gap-4 md:grid-cols-3">
           <article v-for="signal in warningSignals" :key="signal.title" class="rounded-xl border border-[#434655] bg-[#1d1f27]/80 p-5">
-            <i :class="signal.icon" class="text-lg text-blue-400"></i>
+            <i class="fa-solid fa-shield-halved text-lg text-blue-400"></i>
             <h2 class="mt-3 text-sm font-bold text-white">{{ signal.title }}</h2>
             <p class="mt-2 text-xs leading-5 text-[#c3c6d7]">{{ signal.description }}</p>
           </article>
@@ -53,8 +53,8 @@
           <div class="flex items-start justify-between gap-4">
             <div>
               <p class="text-xs font-bold uppercase tracking-[0.2em] text-blue-400">Microlección</p>
-              <h2 class="mt-2 text-xl font-bold text-white">Comprueba lo aprendido</h2>
-              <p class="mt-2 text-sm text-[#c3c6d7]">Responde las tres preguntas. Necesitas al menos 67 puntos para aprobar.</p>
+              <h2 class="mt-2 text-xl font-bold text-white">{{ training.contenido?.title || 'Comprueba lo aprendido' }}</h2>
+              <p class="mt-2 text-sm text-[#c3c6d7]">Responde las preguntas. Necesitas al menos {{ training.contenido?.passScore ?? 67 }} puntos para aprobar.</p>
             </div>
             <span v-if="training.estado === 'Completado'" class="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-400">
               Completado: {{ training.puntaje }}%
@@ -90,50 +90,13 @@ const route = useRoute()
 const isLoading = ref(true)
 const isSubmitting = ref(false)
 const loadError = ref('')
-const training = reactive({ tipo: 'Phishing', estado: 'En Curso', puntaje: null })
-const answers = reactive({ q1: '', q2: '', q3: '' })
+const training = reactive({ tipo: 'Phishing', estado: 'En Curso', puntaje: null, contenido: null })
+const answers = reactive({})
 
 const channelName = computed(() => training.tipo === 'Smishing' ? 'smishing por SMS' : 'phishing por correo')
 
-const warningSignals = computed(() => training.tipo === 'Smishing' ? [
-  { icon: 'fa-solid fa-mobile-screen', title: 'Número inesperado', description: 'Desconfía de remitentes desconocidos o números que intentan parecer oficiales.' },
-  { icon: 'fa-solid fa-clock', title: 'Urgencia artificial', description: 'Los atacantes presionan para que actúes antes de verificar el mensaje.' },
-  { icon: 'fa-solid fa-link', title: 'Enlace sospechoso', description: 'No abras enlaces acortados o dominios que no reconozcas.' }
-] : [
-  { icon: 'fa-solid fa-at', title: 'Remitente alterado', description: 'Comprueba el dominio completo y no sólo el nombre visible del remitente.' },
-  { icon: 'fa-solid fa-clock', title: 'Urgencia artificial', description: 'Pausar y verificar evita decisiones impulsivas ante una falsa emergencia.' },
-  { icon: 'fa-solid fa-link', title: 'Destino diferente', description: 'Revisa la dirección real del enlace antes de abrirlo.' }
-])
-
-const questions = [
-  {
-    id: 'q1',
-    text: '¿Qué debes hacer antes de abrir un enlace inesperado?',
-    options: [
-      { value: 'abrir', label: 'Abrirlo rápidamente para comprobar su contenido.' },
-      { value: 'verificar', label: 'Verificar el remitente y el dominio por un canal confiable.' },
-      { value: 'reenviar', label: 'Reenviarlo a un compañero para que lo pruebe.' }
-    ]
-  },
-  {
-    id: 'q2',
-    text: '¿Cuál es una señal frecuente de ingeniería social?',
-    options: [
-      { value: 'urgencia', label: 'Una solicitud urgente que amenaza con consecuencias inmediatas.' },
-      { value: 'firma', label: 'Que el mensaje incluya una firma corporativa.' },
-      { value: 'horario', label: 'Que el mensaje llegue durante el horario laboral.' }
-    ]
-  },
-  {
-    id: 'q3',
-    text: '¿Qué haces si sospechas que un correo o SMS es fraudulento?',
-    options: [
-      { value: 'responder', label: 'Responder pidiendo más información.' },
-      { value: 'borrar', label: 'Borrarlo sin avisar a nadie.' },
-      { value: 'reportar', label: 'No interactuar y reportarlo al equipo de seguridad.' }
-    ]
-  }
-]
+const warningSignals = computed(() => training.contenido?.signals || [])
+const questions = computed(() => training.contenido?.questions || [])
 
 const loadTraining = async () => {
   try {
@@ -149,7 +112,11 @@ const loadTraining = async () => {
 }
 
 const submitTraining = async () => {
-  const respuestas = [answers.q1, answers.q2, answers.q3]
+  if (route.params.token === 'demo') {
+    showNotice({ type: 'info', title: 'Modo demostración', message: 'El formulario abrió correctamente. Esta vista no guarda respuestas ni modifica el riesgo.' })
+    return
+  }
+  const respuestas = questions.value.map(question => answers[question.id])
   if (respuestas.some(answer => !answer)) {
     showNotice({ type: 'warning', message: 'Responde todas las preguntas antes de finalizar.' })
     return

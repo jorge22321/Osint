@@ -1,9 +1,13 @@
-import { IEnvioRepository, Envio, EnvioProgramado } from '../../domain/ports/IEnvioRepository';
+import { IEnvioRepository, Envio } from '../../domain/ports/IEnvioRepository';
 import { ISmsProvider } from '../../domain/ports/ISmsProvider';
 import { IEmailProvider } from '../../domain/ports/IEmailProvider';
 import { ICampaignRepository } from '../../domain/ports/ICampaignRepository';
 import { env } from '../../../../config/env';
+import { DeliveryResult, safeDeliveryError } from '../../domain/ports/DeliveryResult';
 
+const escapeHtml = (value: string) => value.replace(/[&<>"']/g, character => ({
+  '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+})[character]!);
 
 export class CrearEnvioUseCase {
   constructor(
@@ -18,28 +22,30 @@ export class CrearEnvioUseCase {
   private async despachar(envio: Envio, vector: string, contactoDestino: string): Promise<Envio> {
     if (!envio.id) throw new Error('El envío debe estar persistido antes de despacharse.');
     if (!contactoDestino) {
-      return this.envioRepo.actualizarEstado(envio.id, 'Fallido');
+      return this.envioRepo.actualizarEstado(envio.id, 'Fallido', null, { accepted: false, errorCode: 'NO_DESTINATION', errorMessage: 'El destinatario no tiene un dato de contacto válido.' });
     }
 
-    let envioExitoso = false;
+    let result: DeliveryResult;
     try {
       if (vector === 'email') {
         if (!envio.asunto_generado) throw new Error('El asunto es obligatorio para email.');
-        envioExitoso = await this.emailProvider.enviarEmail(contactoDestino, envio.asunto_generado, envio.contenido_generado);
+        result = await this.emailProvider.enviarEmail(contactoDestino, envio.asunto_generado, envio.contenido_generado);
       } else if (vector === 'sms') {
-        envioExitoso = await this.smsProvider.enviarSms(contactoDestino, envio.contenido_generado);
+        result = await this.smsProvider.enviarSms(contactoDestino, envio.contenido_generado);
       } else {
         throw new Error('Vector no soportado. Debe ser "email" o "sms".');
       }
     } catch (error) {
-      console.error(`Error crítico al despachar el ${vector}:`, error);
-      envioExitoso = false;
+      const safeError = safeDeliveryError(error);
+      console.error(`[Envío ${vector}] ${safeError.errorCode}: ${safeError.errorMessage}`);
+      result = { accepted: false, ...safeError };
     }
 
     return this.envioRepo.actualizarEstado(
       envio.id,
-      envioExitoso ? 'Enviado' : 'Fallido',
-      envioExitoso ? new Date() : null
+      result.accepted ? 'Aceptado' : 'Fallido',
+      result.accepted ? new Date() : null,
+      result
     );
   }
 
@@ -64,6 +70,9 @@ export class CrearEnvioUseCase {
     let contenidoFinal = envioData.contenido_generado;
     const trackingUrl = `${env.PUBLIC_BASE_URL}/track/click/${encodeURIComponent(envioData.tracking_code)}`;
     if (vector === 'email') {
+      // El editor trabaja en texto plano; el correo debe conservar sus saltos
+      // de línea sin interpretar etiquetas escritas en el mensaje.
+      contenidoFinal = escapeHtml(contenidoFinal).replace(/\r?\n/g, '<br/>');
       const pixelTracking = `<img src="${env.PUBLIC_BASE_URL}/track/open/${encodeURIComponent(envioData.tracking_code)}" width="1" height="1" style="display:none;" alt="" />`;
       const callToAction = `<p style="margin-top:24px"><a href="${trackingUrl}" style="display:inline-block;padding:12px 20px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">Revisar información</a></p>`;
       contenidoFinal += `${callToAction}${pixelTracking}`;
@@ -103,5 +112,14 @@ export class CrearEnvioUseCase {
     }
 
     return procesados;
+  }
+
+  async actualizarEntregasSms(): Promise<number> {
+    const pending = await this.envioRepo.listarSmsEnSeguimiento();
+    for (const envio of pending) {
+      const result = await this.smsProvider.consultarEstado(envio.provider_message_id);
+      if (result.accepted) await this.envioRepo.actualizarEstadoProveedor(envio.id, result);
+    }
+    return pending.length;
   }
 }

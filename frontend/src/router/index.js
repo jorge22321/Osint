@@ -7,6 +7,9 @@ import Campaigns from '../page/Campaigns.vue'
 import Employees from '../page/Employees.vue'
 import OsintLogs from '../page/OsintLogs.vue'
 import Training from '../page/Training.vue'
+import Settings from '../page/Settings.vue'
+import SendHistory from '../page/SendHistory.vue'
+import TrainingLibrary from '../page/TrainingLibrary.vue'
 
 const routes = [
   {
@@ -44,7 +47,10 @@ const routes = [
         path: 'osint-logs',
         name: 'OsintLogs',
         component: OsintLogs
-      }
+      },
+      { path: 'send-history', name: 'SendHistory', component: SendHistory },
+      { path: 'training-library', name: 'TrainingLibrary', component: TrainingLibrary },
+      { path: 'settings', name: 'Settings', component: Settings }
     ]
   }
 ]

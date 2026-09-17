@@ -2,7 +2,7 @@
   <aside class="fixed left-0 top-0 h-screen w-56 border-r border-[#434655] bg-[#1d1f27] z-50 flex flex-col font-sans">
     <div class="px-5 py-6">
       <h1 class="text-xl font-bold text-blue-500">CISO Analytics</h1>
-      <p class="text-xs text-[#c3c6d7] opacity-70 mt-1">Consola de Admin</p>
+      <p class="truncate text-xs text-[#c3c6d7] opacity-70 mt-1" :title="organizationName">{{ organizationName || 'Consola de Admin' }}</p>
     </div>
 
     <nav class="flex-1 px-3 space-y-1 overflow-y-auto custom-scrollbar">
@@ -42,11 +42,18 @@
         <i class="fa-solid fa-shield-halved w-5 text-center"></i>
         <span class="text-sm font-medium">Logs OSINT</span>
       </router-link>
-      
-      <a href="#" class="flex items-center gap-3 px-3 py-2 text-[#c3c6d7] hover:text-[#e1e2ed] hover:bg-[#32343d] transition-colors rounded-lg active:scale-95">
+      <router-link to="/app/send-history" class="flex items-center gap-3 px-3 py-2 text-[#c3c6d7] hover:text-[#e1e2ed] hover:bg-[#32343d] rounded-lg transition-colors" active-class="!bg-[#3f465c] !text-[#adb4ce]">
+        <i class="fa-solid fa-clock-rotate-left w-5 text-center"></i>
+        <span class="text-sm font-medium">Historial de envíos</span>
+      </router-link>
+      <router-link to="/app/training-library" class="flex items-center gap-3 px-3 py-2 text-[#c3c6d7] hover:text-[#e1e2ed] hover:bg-[#32343d] rounded-lg transition-colors" active-class="!bg-[#3f465c] !text-[#adb4ce]">
+        <i class="fa-solid fa-graduation-cap w-5 text-center"></i>
+        <span class="text-sm font-medium">Capacitación</span>
+      </router-link>
+      <router-link to="/app/settings" class="flex items-center gap-3 px-3 py-2 text-[#c3c6d7] hover:text-[#e1e2ed] hover:bg-[#32343d] transition-colors rounded-lg active:scale-95" active-class="!bg-[#3f465c] !text-[#adb4ce]">
         <i class="fa-solid fa-gear w-5 text-center"></i>
         <span class="text-sm font-medium">Configuración</span>
-      </a>
+      </router-link>
     </nav>
 
     <div class="p-4 border-t border-[#434655] flex items-center justify-between bg-[#191b22]">
@@ -72,14 +79,24 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { graphqlRequest } from '@/utils/graphqlRequest'
 
 const router = useRouter()
 
 // Variables reactivas para mostrar la info del usuario
 const adminName = ref('Cargando...')
 const adminRole = ref('...')
+const organizationName = ref('')
+const loadOrganizationName = async () => {
+  try {
+    const data = await graphqlRequest('query { settingsOverview { settings { nombre_mostrado } } }')
+    organizationName.value = data.settingsOverview.settings.nombre_mostrado || ''
+  } catch {
+    organizationName.value = ''
+  }
+}
 
 // Al montar el componente, leemos los datos del LocalStorage
 onMounted(() => {
@@ -92,7 +109,10 @@ onMounted(() => {
   } catch (error) {
     console.error("Error leyendo datos del usuario", error)
   }
+  void loadOrganizationName()
+  window.addEventListener('settings-updated', loadOrganizationName)
 })
+onUnmounted(() => window.removeEventListener('settings-updated', loadOrganizationName))
 
 // Función para cerrar sesión de forma segura
 const handleLogout = () => {

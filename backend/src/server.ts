@@ -4,7 +4,7 @@ import cors from 'cors';
 import { ApolloServer } from '@apollo/server';
 import { expressMiddleware } from '@apollo/server/express4';
 import { env } from './config/env';
-import { supabase } from './shared/infrastructure/database/supabase';
+import { hasServiceRole, serviceSupabase, supabase } from './shared/infrastructure/database/supabase';
 import { osintTypeDefs } from './modules/osint/infrastructure/graphql/typeDefs';
 import { osintResolvers } from './modules/osint/infrastructure/graphql/resolvers';
 // Importamos el módulo de autenticación (GraphQL)
@@ -23,6 +23,10 @@ import { NodemailerAdapter } from './modules/campaigns/infrastructure/providers/
 import { TwilioSmsAdapter } from './modules/campaigns/infrastructure/providers/TwilioSmsAdapter';
 import { CrearEnvioUseCase } from './modules/campaigns/application/useCases/CrearEnvioUseCase';
 import { buildGraphqlContext } from './shared/infrastructure/graphql/authContext';
+import { settingsTypeDefs } from './modules/settings/infrastructure/graphql/typeDefs';
+import { settingsResolvers } from './modules/settings/infrastructure/graphql/resolvers';
+import { educationTypeDefs } from './modules/education/infrastructure/graphql/typeDefs';
+import { educationResolvers } from './modules/education/infrastructure/graphql/resolvers';
 async function startServer() {
   const app = express();
 
@@ -39,8 +43,8 @@ async function startServer() {
 
   // 1. Inicializar Apollo Server con nuestro esquema de Login
   const server = new ApolloServer({
-  typeDefs: [iamTypeDefs, osintTypeDefs, targetsTypeDefs, campaignTypeDefs,dashboardTypeDefs],
-  resolvers: [iamResolvers, osintResolvers, targetsResolvers, campaignResolvers, dashboardResolvers],
+  typeDefs: [iamTypeDefs, osintTypeDefs, targetsTypeDefs, campaignTypeDefs,dashboardTypeDefs,settingsTypeDefs,educationTypeDefs],
+  resolvers: [iamResolvers, osintResolvers, targetsResolvers, campaignResolvers, dashboardResolvers,settingsResolvers,educationResolvers],
 });
 
   // Es obligatorio arrancar el servidor de Apollo antes de pasarlo a Express
@@ -69,11 +73,15 @@ async function startServer() {
     console.log(` Endpoint GraphQL listo en http://localhost:${env.PORT}/graphql`);
   });
 
+  if (!hasServiceRole || !serviceSupabase) {
+    console.warn('[Campañas programadas]: falta SUPABASE_SECRET_KEY (o la clave heredada service_role); procesamiento y capacitación pública desactivados.');
+    return;
+  }
   const scheduledDispatch = new CrearEnvioUseCase(
-    new SupabaseEnvioRepository(),
+    new SupabaseEnvioRepository(serviceSupabase),
     new NodemailerAdapter(),
     new TwilioSmsAdapter(),
-    new SupabaseCampaignRepository()
+    new SupabaseCampaignRepository(serviceSupabase)
   );
   let schedulerRunning = false;
   const processScheduledCampaigns = async () => {
@@ -82,6 +90,7 @@ async function startServer() {
     try {
       const processed = await scheduledDispatch.procesarPendientes();
       if (processed > 0) console.log(`[Campañas]: ${processed} envío(s) programado(s) procesado(s).`);
+      await scheduledDispatch.actualizarEntregasSms();
     } catch (error) {
       console.error('[Campañas programadas]', error);
     } finally {

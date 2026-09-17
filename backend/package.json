@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
-    "test": "tsx --test src/modules/osint/application/useCases/EjecutarEscaneoDominioUseCase.test.ts src/modules/campaigns/application/useCases/CrearEnvioUseCase.test.ts",
+    "test": "tsx --test src/modules/osint/application/useCases/EjecutarEscaneoDominioUseCase.test.ts src/modules/campaigns/application/useCases/CrearEnvioUseCase.test.ts src/modules/education/domain/trainingContent.test.ts src/modules/education/domain/trainingScore.test.ts src/modules/education/infrastructure/graphql/resolvers.test.ts",
     "start": "node dist/server.js"
   },
   "keywords": [],

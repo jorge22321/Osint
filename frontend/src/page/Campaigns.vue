@@ -106,6 +106,14 @@
                 IDs: {{ selectedTargets.join(', ') }}
               </p>
             </div>
+            <div class="flex flex-col gap-2">
+              <label class="text-[10px] font-bold text-[#8d90a0] uppercase tracking-widest">Capacitación después del clic</label>
+              <select v-model="trainingTemplateId" class="rounded-lg border border-[#434655] bg-[#11131b] p-3 text-sm text-[#e1e2ed] outline-none focus:border-blue-500">
+                <option value="">Lección base verificada</option>
+                <option v-for="item in availableTemplates" :key="item.id" :value="item.id">{{ item.titulo }} · v{{ item.version }}</option>
+              </select>
+              <p class="text-xs text-[#8d90a0]">La versión elegida se conserva en la campaña. <router-link to="/app/training-library" class="text-blue-400 hover:underline">Editar plantillas</router-link></p>
+            </div>
           </div>
         </div>
 
@@ -162,7 +170,7 @@
                 class="mt-4 w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20 transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <i :class="['fa-solid fa-wand-magic-sparkles group-hover:rotate-12 transition-transform', isGenerating ? 'animate-spin' : '']"></i>
-                {{ isGenerating ? 'Generando...' : 'Generar con IA OSINT' }}
+                {{ isGenerating ? 'Preparando...' : 'Sugerir contenido' }}
               </button>
             </div>
           </div>
@@ -186,8 +194,7 @@
                 VISTA PREVIA
               </button>
               <div class="ml-auto flex items-center gap-2">
-                <div class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
-                <span class="text-[9px] text-[#8d90a0] font-bold uppercase">Autoguardado</span>
+                <span class="text-[9px] text-[#8d90a0] font-bold uppercase">Vista editable</span>
               </div>
             </div>
 
@@ -197,7 +204,7 @@
               <!-- Tab 1: EDITOR -->
               <div v-if="activeTab === 'editor'" class="flex flex-col gap-4 h-full animate-in fade-in duration-300">
                 <div class="flex flex-col gap-2">
-                  <label class="text-[10px] text-[#8d90a0] font-bold uppercase">Asunto Generado por IA</label>
+                  <label class="text-[10px] text-[#8d90a0] font-bold uppercase">Asunto de la campaña</label>
                   <input 
                     v-model="form.subject"
                     class="w-full bg-[#11131b] border border-[#434655] rounded-lg p-3 text-sm text-[#e1e2ed] focus:border-blue-500 outline-none" 
@@ -209,11 +216,6 @@
                 <div class="flex flex-col gap-2 flex-1">
                   <label class="text-[10px] text-[#8d90a0] font-bold uppercase">Cuerpo del Mensaje</label>
                   <div class="bg-[#11131b] border border-[#434655] rounded-lg flex flex-col h-full min-h-[200px]">
-                    <div class="p-2 border-b border-[#434655] flex items-center gap-3">
-                      <button class="p-1 hover:bg-[#32343d] rounded text-[#8d90a0]"><i class="fa-solid fa-bold text-xs"></i></button>
-                      <button class="p-1 hover:bg-[#32343d] rounded text-[#8d90a0]"><i class="fa-solid fa-italic text-xs"></i></button>
-                      <button class="p-1 hover:bg-[#32343d] rounded text-[#8d90a0]"><i class="fa-solid fa-link text-xs"></i></button>
-                    </div>
                     <textarea 
                       v-model="form.body"
                       class="flex-1 bg-transparent p-4 resize-none border-none focus:ring-0 text-sm leading-relaxed text-[#e1e2ed] outline-none"
@@ -324,7 +326,7 @@
                       class="w-full bg-transparent text-sm font-semibold text-[#e1e2ed] outline-none [color-scheme:dark]"
                     />
                   </div>
-                  <p class="mt-2 text-[10px] text-[#8d90a0]">Zona horaria del navegador: {{ browserTimeZone }}</p>
+                  <p class="mt-2 text-[10px] text-[#8d90a0]">Zona horaria del navegador: {{ browserTimeZone }}. Horario permitido: {{ campaignSettings.hora_inicio }}–{{ campaignSettings.hora_fin }} ({{ campaignSettings.zona_horaria }}).</p>
                 </div>
               </div>
             </div>
@@ -334,9 +336,9 @@
                 <i class="fa-solid fa-rocket text-3xl text-[#8d90a0]"></i>
               </div>
               <div class="text-center">
-                <h4 class="text-xl font-bold text-[#e1e2ed] mb-2">Listo para el Despliegue</h4>
+                <h4 class="text-xl font-bold text-[#e1e2ed] mb-2">{{ automaticDeliveryReady ? (publicUrlLocal ? 'Prueba local lista' : 'Lista para programar') : 'Envío no disponible' }}</h4>
                 <p class="text-xs text-[#8d90a0] max-w-xs leading-relaxed">
-                  Los mensajes quedarán en cola y se enviarán automáticamente en la fecha y hora seleccionadas.
+                  {{ deliveryBlockReason }}
                 </p>
                 <div v-if="scheduledDateLabel" class="mt-4 rounded-lg border border-blue-500/20 bg-blue-500/10 px-4 py-3 text-xs text-blue-200">
                   <i class="fa-regular fa-calendar-check mr-2 text-blue-400"></i>
@@ -345,11 +347,11 @@
               </div>
               <button 
                 @click="deployCampaign"
-                :disabled="isDeploying"
+                :disabled="isDeploying || !automaticDeliveryReady || (publicUrlLocal && form.vector === 'sms')"
                 class="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-[#0c0e16] font-extrabold text-sm rounded-xl flex items-center justify-center gap-3 shadow-2xl shadow-emerald-500/20 hover:scale-[1.02] active:scale-95 transition-all uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <i :class="['fa-solid fa-paper-plane', isDeploying ? 'animate-pulse' : '']"></i>
-                {{ isDeploying ? 'Programando...' : 'Programar campaña' }}
+                {{ isDeploying ? 'Programando...' : !automaticDeliveryReady ? 'Envío no disponible' : publicUrlLocal && form.vector === 'sms' ? 'Smishing no disponible en localhost' : publicUrlLocal ? 'Programar prueba local' : 'Programar campaña' }}
               </button>
             </div>
           </div>
@@ -391,10 +393,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import SelectTargetsModal from '../components/modals/SelectTargetsModal.vue'
 import { GRAPHQL_URL } from '@/config/api'
 import { showNotice } from '@/composables/useNotification'
+import { graphqlRequest } from '@/utils/graphqlRequest'
 
 // --- Interfaces ---
 interface FormData {
@@ -481,6 +484,20 @@ const selectedDateTime = computed(() => {
   const date = new Date(currentYear.value, currentMonth.value, selectedDay.value, hour, minute, 0, 0)
   return Number.isNaN(date.getTime()) ? null : date
 })
+const trainingTemplateId = ref('')
+const trainingTemplates = ref<any[]>([])
+const campaignSettings = ref({ zona_horaria: 'America/Lima', hora_inicio: '08:00', hora_fin: '18:00', limite_destinatarios: 100 })
+const backendAutomationReady = ref(false)
+const publicUrlLocal = ref(true)
+const automaticDeliveryReady = computed(() => backendAutomationReady.value)
+const deliveryBlockReason = computed(() => !backendAutomationReady.value
+  ? 'Falta configurar la clave secreta de Supabase en el servidor. Revisa Configuración.'
+  : publicUrlLocal.value && form.value.vector === 'sms'
+    ? 'Un teléfono no puede abrir un enlace localhost de esta PC. Puedes preparar la campaña, pero no programar SMS con este enlace.'
+    : publicUrlLocal.value
+      ? 'Los correos se enviarán de verdad en la fecha elegida. Abre el enlace de capacitación desde esta misma PC; en otro dispositivo, localhost no funcionará.'
+      : 'Los mensajes quedarán en cola y se enviarán en la fecha y hora seleccionadas.')
+const availableTemplates = computed(() => trainingTemplates.value.filter(item => item.estado === 'Publicada' && item.canal === (form.value.vector === 'sms' ? 'Smishing' : 'Phishing')))
 const scheduledDateLabel = computed(() => selectedDateTime.value?.toLocaleString('es-PE', {
   dateStyle: 'full',
   timeStyle: 'short'
@@ -530,6 +547,18 @@ const goToNextStep = () => {
     showNotice({ type: 'warning', message: 'Selecciona al menos un empleado objetivo.' })
     return
   }
+  if (step.value === 1 && selectedTargets.value.length > campaignSettings.value.limite_destinatarios) {
+    showNotice({ type: 'warning', message: `La campaña supera el límite de ${campaignSettings.value.limite_destinatarios} destinatarios configurado.` })
+    return
+  }
+  if (step.value === 1 && form.value.vector === 'sms' && targetsWithoutPhone.value.length > 0) {
+    showNotice({ type: 'warning', message: `${targetsWithoutPhone.value.length} empleado(s) no tienen teléfono para smishing. Agrégalo antes de continuar.` })
+    return
+  }
+  if (step.value === 2 && (!form.value.body.trim() || (form.value.vector === 'email' && !form.value.subject.trim()))) {
+    showNotice({ type: 'warning', message: 'Completa el contenido y, para correo, también el asunto antes de programar.' })
+    return
+  }
   step.value++
 }
 
@@ -537,6 +566,8 @@ const goToNextStep = () => {
 const loadOsintData = async () => {
   const activeDomain = getActiveTargetDomain() || 'Dominio no encontrado'
   organizationDomain.value = activeDomain
+  latestOsintLogId.value = ''
+  exposedEmails.value = []
 
   if (!organizacionId.value || !activeDomain || activeDomain === 'Dominio no encontrado') {
     exposedEmails.value = []
@@ -593,14 +624,18 @@ const loadOsintData = async () => {
     const logs = logsResult.data?.osintLogsPage?.items || []
     const emails: string[] = []
 
-    if (logs.length > 0 && logs[0].id) {
-      latestOsintLogId.value = logs[0].id
-      console.log(' Log OSINT asignado:', latestOsintLogId.value)
-    } else {
-      console.warn(' No se obtuvo un ID de OSINT en el escaneo.')
-    }
+    const relevantLogs = logs.filter((log: any) => {
+      const detail = log.detalle_json || {}
+      const email = String(detail.email || '').toLowerCase()
+      const hosts = Array.isArray(detail.hostnames) ? detail.hostnames : []
+      return email.endsWith(`@${activeDomain}`) || hosts.some((host: unknown) => {
+        const normalized = String(host).toLowerCase()
+        return normalized === activeDomain || normalized.endsWith(`.${activeDomain}`)
+      }) || String(detail.dominio || detail.domain || '').toLowerCase() === activeDomain
+    })
+    latestOsintLogId.value = relevantLogs[0]?.id || ''
 
-    logs.forEach((log: any) => {
+    relevantLogs.forEach((log: any) => {
       const detalle = log.detalle_json || {}
       if (detalle.email) emails.push(detalle.email)
       if (detalle.emails && Array.isArray(detalle.emails)) {
@@ -692,20 +727,20 @@ const handleApplyTargets = (ids: string[], users: any[]) => {
 
 // --- Desplegar campaña ---
 const deployCampaign = async () => {
+  if (!automaticDeliveryReady.value) {
+    showNotice({ type: 'warning', title: 'Envío no disponible', message: deliveryBlockReason.value })
+    return
+  }
+  if (publicUrlLocal.value && form.value.vector === 'sms') {
+    showNotice({ type: 'warning', title: 'Smishing no disponible en localhost', message: deliveryBlockReason.value })
+    return
+  }
   if (!form.value.name || selectedTargets.value.length === 0 || !form.value.body) {
     showNotice({ type: 'warning', message: 'Completa todos los campos obligatorios.' })
     return
   }
   if (form.value.vector === 'email' && !form.value.subject) {
     showNotice({ type: 'warning', message: 'Completa el asunto para la campaña de email.' })
-    return
-  }
-  if (step.value === 1 && form.value.vector === 'sms' && targetsWithoutPhone.value.length > 0) {
-    showNotice({
-      type: 'warning',
-      title: 'Teléfonos requeridos para Smishing',
-      message: `${targetsWithoutPhone.value.length} empleado(s) seleccionado(s) no tienen número telefónico. Regístralo con código de país antes de continuar.`
-    })
     return
   }
   const objetivosSinTelefono = selectedTargetUsers.value.filter((user: any) => !user.telefono)
@@ -715,6 +750,10 @@ const deployCampaign = async () => {
       title: 'Faltan números telefónicos',
       message: `${objetivosSinTelefono.length} empleado(s) no tienen teléfono registrado. Agrégalo antes de desplegar una campaña de smishing.`
     })
+    return
+  }
+  if (selectedTargets.value.length > campaignSettings.value.limite_destinatarios) {
+    showNotice({ type: 'warning', message: `La campaña supera el límite de ${campaignSettings.value.limite_destinatarios} destinatarios configurado.` })
     return
   }
   if (!selectedDay.value) {
@@ -740,10 +779,30 @@ const deployCampaign = async () => {
     showNotice({ type: 'warning', message: 'La fecha y hora de envío deben estar en el futuro.' })
     return
   }
+  const orgTime = new Intl.DateTimeFormat('en-GB', { timeZone: campaignSettings.value.zona_horaria, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(scheduledDate)
+  if (orgTime < campaignSettings.value.hora_inicio || orgTime > campaignSettings.value.hora_fin) {
+    showNotice({ type: 'warning', message: `La hora elegida equivale a ${orgTime} en ${campaignSettings.value.zona_horaria}; debe estar entre ${campaignSettings.value.hora_inicio} y ${campaignSettings.value.hora_fin}.` })
+    return
+  }
+  if (publicUrlLocal.value) {
+    const confirmed = await showNotice({
+      type: 'warning',
+      title: 'Confirmar prueba local',
+      message: `Se programarán ${selectedTargets.value.length} correo(s) reales. El enlace de capacitación contiene localhost y solo funcionará si el destinatario abre el correo en esta misma computadora. ¿Quieres continuar?`,
+      confirmText: 'Programar prueba',
+      showCancel: true
+    })
+    if (!confirmed) return
+  }
   const isoDate = scheduledDate.toISOString()
 
   isDeploying.value = true
   try {
+    const provider = form.value.vector === 'sms' ? 'sms' : 'email'
+    const check = await graphqlRequest(`mutation($provider: String!) { checkDeliveryProvider(provider: $provider) { state detail } }`, { provider })
+    if (check.checkDeliveryProvider.state !== 'Conectado') {
+      throw new Error(`${provider === 'sms' ? 'Smishing' : 'Correo'} no disponible: ${check.checkDeliveryProvider.detail}`)
+    }
     const responseCampaign = await fetch(GRAPHQL_URL, {
       method: 'POST',
       headers: {
@@ -767,6 +826,7 @@ const deployCampaign = async () => {
             estado: 'Programada',
             fecha_programada: isoDate,
             creado_por: adminId,
+            trainingTemplateId: trainingTemplateId.value || null,
           },
           organizacionId: orgId,
         },
@@ -781,7 +841,7 @@ const deployCampaign = async () => {
     const campaignId = resultCampaign.data.crearCampaign.id
     const asunto = form.value.subject || ''
     const contenido = form.value.body
-    let enviosExitosos = 0
+    let enviosPreparados = 0
 
     for (const targetId of selectedTargets.value) {
       const trackingCode = crypto.randomUUID()
@@ -819,23 +879,23 @@ const deployCampaign = async () => {
         })
 
         const resultEnvio = await responseEnvio.json()
-        if (!resultEnvio.errors) {
-          enviosExitosos++
-        }
+        if (resultEnvio.errors) throw new Error(resultEnvio.errors[0].message)
+        enviosPreparados++
       } catch (error) {
         console.error(`Error en la petición para ${targetId}:`, error)
       }
     }
 
     showNotice({
-      type: 'success',
+      type: enviosPreparados === selectedTargets.value.length ? 'success' : 'warning',
       title: 'Campaña desplegada',
-      message: `La campaña "${resultCampaign.data.crearCampaign.nombre}" fue creada correctamente.\n${enviosExitosos} de ${selectedTargets.value.length} envíos procesados.\nID: ${campaignId}`
+      message: `La campaña "${resultCampaign.data.crearCampaign.nombre}" fue creada.\n${enviosPreparados} de ${selectedTargets.value.length} envíos quedaron preparados; esto no significa que hayan llegado.\nConsulta el Historial de envíos para ver cada estado.\nID: ${campaignId}`
     })
 
     form.value = { name: '', vector: 'email', subject: '', body: '' }
     selectedTargets.value = []
     selectedTargetUsers.value = []
+    trainingTemplateId.value = ''
     activeTab.value = 'editor'
     selectedDay.value = null
     selectedTime.value = getDefaultScheduledTime()
@@ -859,8 +919,27 @@ watch(step, (newStep) => {
 
 // Watcher para limpiar el asunto si cambian a SMS
 watch(() => form.value.vector, (newVector) => {
+  trainingTemplateId.value = ''
   if (newVector === 'sms') {
     form.value.subject = ''
+  }
+})
+
+onMounted(async () => {
+  try {
+    const config = await graphqlRequest(`query { settingsOverview { backendAutomationReady publicUrlLocal settings { zona_horaria hora_inicio hora_fin limite_destinatarios } } }`)
+    const settings = config.settingsOverview.settings
+    backendAutomationReady.value = config.settingsOverview.backendAutomationReady
+    publicUrlLocal.value = config.settingsOverview.publicUrlLocal
+    campaignSettings.value = { ...settings, hora_inicio: settings.hora_inicio.slice(0, 5), hora_fin: settings.hora_fin.slice(0, 5) }
+  } catch (error: any) {
+    showNotice({ type: 'error', title: 'Configuración no disponible', message: 'No se pudieron cargar las reglas de campaña. Vuelve a intentarlo más tarde.' })
+  }
+  try {
+    const library = await graphqlRequest(`query { trainingTemplates { id titulo canal estado version } }`)
+    trainingTemplates.value = library.trainingTemplates
+  } catch (error) {
+    console.error('No se pudieron cargar las plantillas de capacitación:', error)
   }
 })
 </script>

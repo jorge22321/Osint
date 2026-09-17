@@ -8,4 +8,7 @@ export interface Campaign {
   fecha_programada?: Date | null;
   creado_por: string;
   creado_en?: Date;
+  training_snapshot?: Record<string, unknown> | null;
+  training_template_id?: string | null;
+  training_template_version?: number | null;
 }

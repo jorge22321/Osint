@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import { IEmailProvider } from '../../domain/ports/IEmailProvider';
+import { DeliveryResult, safeDeliveryError } from '../../domain/ports/DeliveryResult';
 
 export class NodemailerAdapter implements IEmailProvider {
   private transporter;
@@ -14,18 +15,19 @@ export class NodemailerAdapter implements IEmailProvider {
     });
   }
 
-  async enviarEmail(destinatario: string, asunto: string, contenidoHtml: string): Promise<boolean> {
+  async enviarEmail(destinatario: string, asunto: string, contenidoHtml: string): Promise<DeliveryResult> {
     try {
-      await this.transporter.sendMail({
+      const sent = await this.transporter.sendMail({
         from: `"Seguridad TI" <${process.env.GMAIL_USER}>`,
         to: destinatario,
         subject: asunto,
         html: contenidoHtml,
       });
-      return true;
+      return { accepted: true, providerId: sent.messageId, providerStatus: 'accepted' };
     } catch (error) {
-      console.error('Error al enviar email simulado:', error);
-      return false;
+      const safeError = safeDeliveryError(error);
+      console.error(`[Correo] ${safeError.errorCode}: ${safeError.errorMessage}`);
+      return { accepted: false, ...safeError };
     }
   }
 }

@@ -28,6 +28,9 @@ export class SupabaseCampaignRepository implements ICampaignRepository {
         estado: data.estado || 'Borrador',
         fecha_programada: data.fecha_programada || null,
         creado_por: data.creado_por,
+        training_snapshot: data.training_snapshot || null,
+        training_template_id: data.training_template_id || null,
+        training_template_version: data.training_template_version || null,
       }])
       .select()
       .single();

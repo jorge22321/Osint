@@ -93,8 +93,8 @@
             <i class="fa-solid fa-triangle-exclamation mr-2"></i>
             {{ errorMessage }}
           </div>
-          <button type="submit" class="w-full mt-2 py-2.5 px-4 bg-blue-600 text-white text-sm font-semibold rounded-md hover:bg-blue-700 active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-md shadow-blue-600/20">
-            Iniciar Sesión
+          <button type="submit" :disabled="loading" class="w-full mt-2 py-2.5 px-4 bg-blue-600 text-white text-sm font-semibold rounded-md hover:bg-blue-700 active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-md shadow-blue-600/20 disabled:opacity-50">
+            {{ loading ? 'Ingresando...' : 'Iniciar Sesión' }}
             <i class="fa-solid fa-arrow-right"></i>
           </button>
         </form>
@@ -173,16 +173,12 @@ const handleLogin = async () => {
     const resultado = await response.json()
 
     // Manejo de errores devueltos por GraphQL/Supabase
-    if (resultado.errors && resultado.errors.length > 0) {
-      errorMessage.value = resultado.errors[0].message
+    if (!response.ok || resultado.errors?.length || !resultado.data?.loginAdmin?.token) {
+      errorMessage.value = resultado.errors?.[0]?.message || 'No se pudo iniciar sesión. Comprueba tus datos e inténtalo nuevamente.'
     } else {
       const authData = resultado.data.loginAdmin
       
-      console.log('¡Login Exitoso! ')
-      console.log('Token JWT:', authData.token)
-      console.log('Datos del Admin:', authData.admin)
-
-      // 1. Guardamos el token de sesión de Supabase de forma segura
+      // La sesión se conserva para las peticiones de esta instalación.
       localStorage.setItem('ciso_token', authData.token)
       localStorage.setItem('ciso_user', JSON.stringify(authData.admin))
 

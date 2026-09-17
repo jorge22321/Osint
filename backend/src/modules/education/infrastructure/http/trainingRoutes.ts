@@ -1,12 +1,17 @@
 import { Router } from 'express';
 import { env } from '../../../../config/env';
 import { TrainingService } from '../../application/TrainingService';
+import { defaultTrainingContent, publicTrainingContent } from '../../domain/trainingContent';
 
 const TOKEN_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const PIXEL_GIF = Buffer.from('R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=', 'base64');
 
 export const trainingRoutes = Router();
 const service = new TrainingService();
+
+trainingRoutes.get('/api/training/demo', (_req, res) => {
+  res.json({ tipo: 'Phishing', estado: 'Demostración', puntaje: null, contenido: publicTrainingContent(defaultTrainingContent('Phishing')) });
+});
 
 trainingRoutes.get('/track/open/:token', async (req, res) => {
   try {
@@ -36,8 +41,9 @@ trainingRoutes.get('/api/training/:token', async (req, res) => {
     const training = await service.obtenerCapacitacion(req.params.token);
     if (!training) return res.status(404).json({ message: 'No se encontró la capacitación.' });
     return res.json(training);
-  } catch (error: any) {
-    return res.status(500).json({ message: error.message || 'No se pudo cargar la capacitación.' });
+  } catch (error) {
+    console.error('[Capacitación]', error);
+    return res.status(503).json({ message: 'Esta capacitación aún no está disponible en esta instalación.' });
   }
 });
 
@@ -47,7 +53,11 @@ trainingRoutes.post('/api/training/:token/complete', async (req, res) => {
     const result = await service.completarCapacitacion(req.params.token, req.body?.respuestas);
     if (!result) return res.status(404).json({ message: 'No se encontró la capacitación.' });
     return res.json(result);
-  } catch (error: any) {
-    return res.status(400).json({ message: error.message || 'No se pudo guardar la capacitación.' });
+  } catch (error) {
+    if (error instanceof Error && error.message === 'Debe responder todas las preguntas con opciones válidas.') {
+      return res.status(400).json({ message: error.message });
+    }
+    console.error('[Capacitación]', error);
+    return res.status(503).json({ message: 'No se pudo guardar la capacitación en este momento.' });
   }
 });

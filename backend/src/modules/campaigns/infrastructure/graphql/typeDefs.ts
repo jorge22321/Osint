@@ -17,6 +17,7 @@ export const campaignTypeDefs = `#graphql
     estado: String
     fecha_programada: String
     creado_por: ID! 
+    trainingTemplateId: ID
   }
 
   input CrearEnvioInput {
@@ -47,9 +48,36 @@ export const campaignTypeDefs = `#graphql
     fecha_reporte: String
   }
 
+  type CampaignHistoryItem {
+    id: ID!
+    empleado: String!
+    destino: String!
+    canal: String!
+    estado: String!
+    fecha_envio: String
+    fecha_click: String
+    provider_status: String
+    provider_error_code: String
+    provider_error_message: String
+    intentos: Int!
+    asunto: String!
+    contenido: String!
+    capacitacion_estado: String
+    puntaje: Int
+    fecha_completado: String
+    respuestas: [TrainingAnswerHistory!]!
+  }
+  type TrainingAnswerHistory {
+    pregunta: String!
+    respuesta: String
+    correcta: Boolean
+  }
+  type CampaignHistoryPage { items: [CampaignHistoryItem!]!, total: Int! }
+
   type Query {
     campaigns(organizacionId: ID!): [Campaign!]!
     campaign(id: ID!): Campaign
+    campaignHistory(campaignId: ID!, limit: Int = 50, offset: Int = 0): CampaignHistoryPage!
   }
 
   type Mutation {

@@ -42,9 +42,6 @@ export class MistralAdapter implements IAiGenerator {
       // 2. Extraer el contenido de la respuesta de forma segura
       const rawContent = response?.choices?.[0]?.message?.content;
       
-      // Log para depuración
-      console.log(' Respuesta cruda de Mistral:', rawContent);
-
       let contentText: string;
 
       if (typeof rawContent === 'string') {
@@ -78,21 +75,15 @@ export class MistralAdapter implements IAiGenerator {
         }
       }
 
-      // 5. Asegurar que las propiedades existan
-      const asunto = parsed?.asunto || 'Acción requerida: Verificación de seguridad';
-      const contenido = parsed?.contenido || `<p>Estimado usuario,</p><p>Su cuenta requiere verificación.</p>`;
+      const asunto = typeof parsed?.asunto === 'string' ? parsed.asunto.trim() : '';
+      const contenido = typeof parsed?.contenido === 'string' ? parsed.contenido.trim() : '';
+      if (!asunto || !contenido) throw new Error('La respuesta no contenía asunto y contenido válidos.');
 
       return { asunto, contenido };
 
     } catch (error) {
-      console.error(' Error en MistralAdapter:', error);
-      // Fallback: devolver un correo genérico para no romper la experiencia
-      return {
-        asunto: 'Aviso de seguridad: verificación requerida',
-        contenido: `<p>Estimado usuario,</p>
-        <p>Hemos detectado actividad inusual en su cuenta. Por favor, verifique su identidad.</p>
-        <p><strong>Atentamente,</strong><br>Departamento de Seguridad</p>`
-      };
+      console.error('[Generación de campaña]', error instanceof Error ? error.message : 'Error desconocido');
+      throw new Error('No se pudo generar el contenido. Inténtalo de nuevo o escríbelo manualmente.');
     }
   }
 }
